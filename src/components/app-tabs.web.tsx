@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../app/_layout';
+import { useApp } from '@/context/AppContext';
 
 export default function AppTabs() {
   const { isDark } = useApp();

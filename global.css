@@ -11,3 +11,26 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* Map default NativeWind font weight/style classes to Quicksand custom font files */
+.font-sans {
+  font-family: QuickSand-Regular;
+}
+.font-serif {
+  font-family: QuickSand-Regular;
+}
+.font-light {
+  font-family: QuickSand-Light;
+}
+.font-medium {
+  font-family: QuickSand-Medium;
+}
+.font-semibold {
+  font-family: QuickSand-Semibold;
+}
+.font-bold {
+  font-family: QuickSand-Bold;
+}
+.font-extrabold {
+  font-family: QuickSand-Bold;
+}

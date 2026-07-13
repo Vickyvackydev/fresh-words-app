@@ -1,4 +1,4 @@
-import { useApp } from "../app/_layout";
+import { useApp } from "@/context/AppContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 

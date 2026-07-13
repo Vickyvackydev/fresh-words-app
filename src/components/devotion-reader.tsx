@@ -1,4 +1,4 @@
-import { useApp } from "../app/_layout";
+import { useApp } from "@/context/AppContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Devotional } from "../db/mockDb";
+import { getBaseUrl } from "../api/client";
 
 interface DevotionReaderProps {
   devotional: Devotional | null;
@@ -34,8 +35,7 @@ export default function DevotionReader({
   onPrev,
 }: DevotionReaderProps) {
   const insets = useSafeAreaInsets();
-  const [fontSize, setFontSize] = useState<number>(18);
-  const [isSerif, setIsSerif] = useState<boolean>(true);
+  const [fontSize, setFontSize] = useState<number>(21);
   const [showControls, setShowControls] = useState<boolean>(false);
   const [checkedActions, setCheckedActions] = useState<Record<string, boolean>>(
     {},
@@ -50,10 +50,27 @@ export default function DevotionReader({
   // Load checklist items
   useEffect(() => {
     if (devotional) {
-      // In a real app we'd load this from AsyncStorage
       setCheckedActions({});
     }
   }, [devotional]);
+
+  // Track devotional read events
+  useEffect(() => {
+    if (visible && devotional) {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/devotionals/read`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          devotional_id: devotional.id,
+        }),
+      }).catch((e) => {
+        console.warn("Deferred view tracking: client offline.", e);
+      });
+    }
+  }, [visible, devotional?.id]);
 
   useEffect(() => {
     if (visible) {
@@ -200,35 +217,11 @@ export default function DevotionReader({
           <View className="bg-[#F3EFE6] dark:bg-[#1E1E1E] px-6 py-4 border-b border-[#E0E1E6] dark:border-[#2E3135] space-y-4">
             <View className="flex-row justify-between items-center">
               <Text className="text-sm font-medium text-[#60646C] dark:text-[#B0B4BA]">
-                Font Style
-              </Text>
-              <View className="flex-row bg-[#E0E1E6] dark:bg-[#2E3135] rounded-lg p-0.5">
-                <Pressable
-                  onPress={() => setIsSerif(true)}
-                  className={`px-3 py-1.5 rounded-md ${isSerif ? "bg-white dark:bg-[#121212]" : ""}`}
-                >
-                  <Text className="text-xs font-semibold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
-                    Serif (Lora)
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setIsSerif(false)}
-                  className={`px-3 py-1.5 rounded-md ${!isSerif ? "bg-white dark:bg-[#121212]" : ""}`}
-                >
-                  <Text className="text-xs font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                    Sans (Inter)
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <View className="flex-row justify-between items-center">
-              <Text className="text-sm font-medium text-[#60646C] dark:text-[#B0B4BA]">
                 Text Size
               </Text>
               <View className="flex-row items-center space-x-6">
                 <Pressable
-                  onPress={() => setFontSize(Math.max(14, fontSize - 2))}
+                  onPress={() => setFontSize(Math.max(16, fontSize - 2))}
                   className="w-10 h-10 bg-[#E0E1E6] dark:bg-[#2E3135] rounded-full items-center justify-center active:opacity-60"
                 >
                   <Text className="text-sm font-bold text-[#1C1917] dark:text-[#F3F4F6]">
@@ -239,7 +232,7 @@ export default function DevotionReader({
                   {fontSize}px
                 </Text>
                 <Pressable
-                  onPress={() => setFontSize(Math.min(26, fontSize + 2))}
+                  onPress={() => setFontSize(Math.min(30, fontSize + 2))}
                   className="w-10 h-10 bg-[#E0E1E6] dark:bg-[#2E3135] rounded-full items-center justify-center active:opacity-60"
                 >
                   <Text className="text-sm font-bold text-[#1C1917] dark:text-[#F3F4F6]">
@@ -263,7 +256,7 @@ export default function DevotionReader({
           </Text>
 
           <Text
-            className={`text-3xl font-extrabold text-[#1C1917] dark:text-[#F3F4F6] mb-6 leading-tight ${isSerif ? "font-serif" : "font-sans"}`}
+            className="text-3xl font-extrabold text-[#1C1917] dark:text-[#F3F4F6] mb-6 leading-tight font-sans"
             style={{ fontSize: fontSize + 10 }}
           >
             {devotional.title}
@@ -290,10 +283,9 @@ export default function DevotionReader({
             {devotional.body.map((p, index) => (
               <Text
                 key={index}
-                className={`text-[#1C1917] dark:text-[#F3F4F6] leading-[1.7] mb-4`}
+                className="text-[#1C1917] dark:text-[#F3F4F6] leading-[1.7] mb-4 font-sans"
                 style={{
                   fontSize: fontSize,
-                  fontFamily: isSerif ? "serif" : undefined,
                 }}
               >
                 {p}
@@ -314,7 +306,7 @@ export default function DevotionReader({
               </Text>
             </View>
             <Text
-              className={`leading-relaxed text-[#1F2937] dark:text-[#E5E7EB] italic ${isSerif ? "font-serif" : ""}`}
+              className="leading-relaxed text-[#1F2937] dark:text-[#E5E7EB] italic font-sans"
               style={{ fontSize: fontSize - 1 }}
             >
               {devotional.prayer}

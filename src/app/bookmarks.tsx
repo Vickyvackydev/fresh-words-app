@@ -7,7 +7,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Devotional, MOCK_DEVOTIONALS } from "../db/mockDb";
-import { useApp } from "./_layout";
+import { useApp } from "@/context/AppContext";
 
 type FilterCategory =
   | "All"

@@ -10,12 +10,14 @@ import {
   Text,
   TextInput,
   View,
+  Image,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { useApp } from "./_layout";
+import { useApp } from "@/context/AppContext";
+import { useSubmitFeedback } from "../api/hooks";
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -24,12 +26,11 @@ export default function SettingsScreen() {
     setIsDark,
     fontSize,
     setFontSize,
-    isSerif,
-    setIsSerif,
     notificationsEnabled,
     setNotificationsEnabled,
     notificationTime,
     setNotificationTime,
+    appSettings,
   } = useApp();
 
   // Settings modals
@@ -61,20 +62,37 @@ export default function SettingsScreen() {
     }, 300);
   };
 
+  const submitFeedbackMutation = useSubmitFeedback();
+
   const handleFeedbackSubmit = () => {
     if (!feedbackMessage.trim()) return;
     setSubmittingFeedback(true);
-    // simulate network
-    setTimeout(() => {
-      setSubmittingFeedback(false);
-      setFeedbackSuccess(true);
-      setTimeout(() => {
-        setFeedbackSuccess(false);
-        setFeedbackVisible(false);
-        setFeedbackMessage("");
-        setFeedbackEmail("");
-      }, 1500);
-    }, 1200);
+
+    submitFeedbackMutation.mutate(
+      {
+        name: "Mobile App User",
+        email: feedbackEmail || "anonymous@freshwords.app",
+        message: feedbackMessage,
+      },
+      {
+        onSuccess: () => {
+          setSubmittingFeedback(false);
+          setFeedbackSuccess(true);
+          setTimeout(() => {
+            setFeedbackSuccess(false);
+            setFeedbackVisible(false);
+            setFeedbackMessage("");
+            setFeedbackEmail("");
+          }, 1500);
+        },
+        onError: (err: any) => {
+          setSubmittingFeedback(false);
+          alert(
+            "Failed to submit feedback: " + (err.message || "Unknown error"),
+          );
+        },
+      },
+    );
   };
 
   return (
@@ -154,38 +172,6 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Divider */}
-          <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135]" />
-
-          {/* Font selection */}
-          <View className="flex-row justify-between items-center">
-            <View>
-              <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                Default Font Family
-              </Text>
-              <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                Lora serif vs Inter sans
-              </Text>
-            </View>
-            <View className="flex-row bg-[#FAF8F5] dark:bg-[#2E3135] rounded-lg p-0.5 border border-[#E0E1E6] dark:border-[#3E4249]">
-              <Pressable
-                onPress={() => setIsSerif(true)}
-                className={`px-3 py-1 rounded-md ${isSerif ? "bg-white dark:bg-[#121212]" : ""}`}
-              >
-                <Text className="text-xs font-semibold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
-                  Serif
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setIsSerif(false)}
-                className={`px-3 py-1 rounded-md ${!isSerif ? "bg-white dark:bg-[#121212]" : ""}`}
-              >
-                <Text className="text-xs font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                  Sans
-                </Text>
-              </Pressable>
-            </View>
-          </View>
         </View>
 
         {/* Section 2: Notifications */}
@@ -438,7 +424,7 @@ export default function SettingsScreen() {
           >
             <View className="flex-row justify-between items-center mb-4">
               <Text className="text-xl font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
-                About Fresh Words
+                About {appSettings?.church_name || "Fresh Words"}
               </Text>
               <Pressable onPress={() => setAboutVisible(false)}>
                 <Ionicons
@@ -450,11 +436,18 @@ export default function SettingsScreen() {
             </View>
 
             <View className="items-center py-4">
-              <View className="w-16 h-16 bg-[#FAF8F5] dark:bg-[#252527] rounded-2xl items-center justify-center shadow-xs mb-3">
-                <Text className="text-3xl">🕊️</Text>
+              <View className="w-16 h-16 bg-[#FAF8F5] dark:bg-[#252527] rounded-2xl items-center justify-center shadow-xs mb-3 overflow-hidden">
+                {appSettings?.app_logo_url ? (
+                  <Image
+                    source={{ uri: appSettings.app_logo_url }}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Text className="text-3xl">🕊️</Text>
+                )}
               </View>
-              <Text className="text-lg font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
-                Fresh Words Devotional
+              <Text className="text-lg font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif text-center">
+                {appSettings?.church_name || "Fresh Words Devotional"}
               </Text>
               <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mb-4">
                 Version 1.0.0 (Build 1)
@@ -462,9 +455,7 @@ export default function SettingsScreen() {
             </View>
 
             <Text className="text-sm leading-6 text-[#4B5563] dark:text-[#D1D5DB] text-center">
-              Our mission is to help people grow closer to God daily by
-              providing distraction-free spiritual materials, scriptures, and
-              reminders entirely offline.
+              {appSettings?.about_us || "Our mission is to help people grow closer to God daily by providing distraction-free spiritual materials, scriptures, and reminders entirely offline."}
             </Text>
 
             <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135] my-4" />
@@ -475,9 +466,19 @@ export default function SettingsScreen() {
                   Church Alliance
                 </Text>
                 <Text className="text-xs font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                  Global Fellowship
+                  {appSettings?.church_name || "Global Fellowship"}
                 </Text>
               </View>
+              {appSettings?.support_email && (
+                <View className="flex-row justify-between">
+                  <Text className="text-xs font-semibold text-[#60646C] dark:text-[#B0B4BA]">
+                    Support Email
+                  </Text>
+                  <Text className="text-xs font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                    {appSettings.support_email}
+                  </Text>
+                </View>
+              )}
               <View className="flex-row justify-between">
                 <Text className="text-xs font-semibold text-[#60646C] dark:text-[#B0B4BA]">
                   Developer

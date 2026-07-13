@@ -1,12 +1,34 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  Text,
-  View,
-} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Safe storage wrapper — prevents app crash when native module is null
+// (can happen on first cold-boot in Expo Go before native modules register)
+const safeStorage = {
+  async getItem(key: string): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    try {
+      await AsyncStorage.setItem(key, value);
+    } catch {
+      // silently ignore — in-memory state still works
+    }
+  },
+  async multiGet(keys: string[]): Promise<readonly [string, string | null][]> {
+    try {
+      return await AsyncStorage.multiGet(keys);
+    } catch {
+      return keys.map((k) => [k, null]);
+    }
+  },
+};
 import { useColorScheme as useNativeWindColorScheme } from "nativewind";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Animated, Image, Text, View } from "react-native";
+import { getBaseUrl } from "../api/client";
 
 import AppTabs from "@/components/app-tabs";
 import Onboarding from "@/components/onboarding";
@@ -16,6 +38,8 @@ import {
   DefaultTheme as NavigationDefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import {
   SafeAreaProvider,
@@ -23,40 +47,13 @@ import {
 } from "react-native-safe-area-context";
 import "../../global.css";
 
+const queryClient = new QueryClient();
+
 // Prevent auto hiding splash screen during initialization
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // InMemory cache for native platforms, localStorage for web
-const memoryCache: Record<string, string> = {};
-
-export const AppContext = createContext<{
-  isDark: boolean;
-  setIsDark: (dark: boolean) => void;
-  hasLaunched: boolean;
-  setHasLaunched: (launched: boolean) => void;
-  permissionPromptDone: boolean;
-  setPermissionPromptDone: (done: boolean) => void;
-  bookmarks: string[];
-  toggleBookmark: (id: string) => void;
-  readingProgress: Record<string, number>;
-  saveProgress: (id: string, progress: number) => void;
-  notificationsEnabled: boolean;
-  setNotificationsEnabled: (enabled: boolean) => void;
-  notificationTime: string;
-  setNotificationTime: (time: string) => void;
-  fontSize: number;
-  setFontSize: (size: number) => void;
-  isSerif: boolean;
-  setIsSerif: (serif: boolean) => void;
-  feedbackSubmitted: boolean;
-  setFeedbackSubmitted: (sub: boolean) => void;
-} | null>(null);
-
-export function useApp() {
-  const context = useContext(AppContext);
-  if (!context) throw new Error("useApp must be used within AppProvider");
-  return context;
-}
+import { AppContext, useApp } from "../context/AppContext";
 
 const CustomLightTheme = {
   ...NavigationDefaultTheme,
@@ -94,79 +91,149 @@ export default function RootLayout() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [notificationTime, setNotificationTime] = useState("07:00");
   const [fontSize, setFontSize] = useState(18);
-  const [isSerif, setIsSerif] = useState(true);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [appSettings, setAppSettings] = useState<any>(null);
+  const [deviceId, setDeviceId] = useState<string>("");
 
   // App loading state
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
 
+  // Load custom Quicksand fonts
+  const [fontsLoaded, error] = useFonts({
+    "QuickSand-Bold": require("../assets/fonts/Quicksand-Bold.ttf"),
+    "QuickSand-Medium": require("../assets/fonts/Quicksand-Medium.ttf"),
+    "QuickSand-Regular": require("../assets/fonts/Quicksand-Regular.ttf"),
+    "QuickSand-Semibold": require("../assets/fonts/Quicksand-SemiBold.ttf"),
+    "QuickSand-Light": require("../assets/fonts/Quicksand-Light.ttf"),
+  });
+
+  useEffect(() => {
+    if (error) throw error;
+  }, [error]);
+
+  useEffect(() => {
+    if (fontsLoaded && !loading) {
+      // Hide Expo Splash Screen
+      SplashScreen.hideAsync().catch(() => {});
+      // Wait 1.5s for Custom Peaceful Splash Screen
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [fontsLoaded, loading]);
+
   // Initialize storage
   useEffect(() => {
     const initStorage = async () => {
       try {
-        if (Platform.OS === "web") {
-          const launched = localStorage.getItem("hasLaunched") === "true";
-          const permDone =
-            localStorage.getItem("permissionPromptDone") === "true";
-          const storedBookmarks = JSON.parse(
-            localStorage.getItem("bookmarks") || "[]",
-          );
-          const storedProgress = JSON.parse(
-            localStorage.getItem("readingProgress") || "{}",
-          );
-          const storedDark = localStorage.getItem("isDark");
-          const notify =
-            localStorage.getItem("notificationsEnabled") !== "false";
-          const notifyTime =
-            localStorage.getItem("notificationTime") || "07:00";
-          const size = parseInt(localStorage.getItem("fontSize") || "18", 10);
-          const serif = localStorage.getItem("isSerif") !== "false";
+        const keys = [
+          "hasLaunched",
+          "permissionPromptDone",
+          "bookmarks",
+          "readingProgress",
+          "isDark",
+          "notificationsEnabled",
+          "notificationTime",
+          "fontSize",
+          "deviceId",
+          "appSettings",
+        ];
+        const stores = await safeStorage.multiGet(keys);
+        const storeMap: Record<string, string | null> = {};
+        stores.forEach(([k, v]) => {
+          storeMap[k] = v;
+        });
 
-          setHasLaunched(launched);
-          setPermissionPromptDone(permDone);
-          setBookmarks(storedBookmarks);
-          setReadingProgress(storedProgress);
-          setNotificationsEnabled(notify);
-          setNotificationTime(notifyTime);
-          setFontSize(size);
-          setIsSerif(serif);
-          if (storedDark !== null) {
-            const darkVal = storedDark === "true";
-            setIsDark(darkVal);
-            // Sync NativeWind color scheme engine with stored preference
-            setColorScheme(darkVal ? "dark" : "light");
+        if (storeMap.hasLaunched === "true") setHasLaunched(true);
+        if (storeMap.permissionPromptDone === "true")
+          setPermissionPromptDone(true);
+        if (storeMap.bookmarks) setBookmarks(JSON.parse(storeMap.bookmarks));
+        if (storeMap.readingProgress)
+          setReadingProgress(JSON.parse(storeMap.readingProgress));
+        if (storeMap.notificationsEnabled === "false")
+          setNotificationsEnabled(false);
+        if (storeMap.notificationTime)
+          setNotificationTime(storeMap.notificationTime);
+        if (storeMap.fontSize) setFontSize(parseInt(storeMap.fontSize, 10));
+
+        let storedDark = storeMap.isDark;
+        if (storedDark !== null) {
+          const darkVal = storedDark === "true";
+          setIsDark(darkVal);
+          setColorScheme(darkVal ? "dark" : "light");
+        }
+
+        // Generate or retrieve Device ID
+        let devId = storeMap.deviceId;
+        if (!devId) {
+          devId =
+            "device_" +
+            Math.random().toString(36).substring(2, 15) +
+            Math.random().toString(36).substring(2, 15);
+          await safeStorage.setItem("deviceId", devId);
+        }
+        setDeviceId(devId);
+
+        // Load offline cached settings
+        if (storeMap.appSettings) {
+          setAppSettings(JSON.parse(storeMap.appSettings));
+        }
+
+        // Fetch settings from server
+        try {
+          const baseUrl = getBaseUrl();
+          const response = await fetch(`${baseUrl}/settings`);
+          const json = await response.json();
+          if (json.status === "success" && json.data) {
+            setAppSettings(json.data);
+            await safeStorage.setItem(
+              "appSettings",
+              JSON.stringify(json.data),
+            );
           }
+        } catch (fetchErr) {
+          console.warn(
+            "Failed to fetch settings from server, using cached settings:",
+            fetchErr,
+          );
+        }
+
+        // Sync bookmarks from backend
+        try {
+          const baseUrl = getBaseUrl();
+          const response = await fetch(
+            `${baseUrl}/bookmarks?device_id=${devId}`,
+          );
+          const json = await response.json();
+          if (json.status === "success" && Array.isArray(json.data)) {
+            const serverBookmarkIds = json.data.map((d: any) => d.id);
+            setBookmarks(serverBookmarkIds);
+            await safeStorage.setItem(
+              "bookmarks",
+              JSON.stringify(serverBookmarkIds),
+            );
+          }
+        } catch (syncErr) {
+          console.warn(
+            "Failed to sync bookmarks from server, using offline bookmarks:",
+            syncErr,
+          );
         }
       } catch (e) {
-        console.error(e);
+        console.error("Storage initialization error:", e);
       } finally {
         setLoading(false);
-        // Hide Expo Splash Screen
-        SplashScreen.hideAsync().catch(() => {});
-        // Wait 1.5s for Custom Peaceful Splash Screen
-        setTimeout(() => {
-          setShowSplash(false);
-        }, 1500);
       }
     };
     initStorage();
   }, []);
 
   const saveStorageItem = (key: string, value: any) => {
-    try {
-      if (Platform.OS === "web") {
-        localStorage.setItem(
-          key,
-          typeof value === "string" ? value : JSON.stringify(value),
-        );
-      } else {
-        memoryCache[key] =
-          typeof value === "string" ? value : JSON.stringify(value);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    const stringValue =
+      typeof value === "string" ? value : JSON.stringify(value);
+    safeStorage.setItem(key, stringValue);
   };
 
   const handleSetHasLaunched = (val: boolean) => {
@@ -181,7 +248,6 @@ export default function RootLayout() {
 
   const handleSetIsDark = (val: boolean) => {
     setIsDark(val);
-    // Tell NativeWind's engine to switch dark: variant resolution globally
     setColorScheme(val ? "dark" : "light");
     saveStorageItem("isDark", val);
   };
@@ -201,17 +267,28 @@ export default function RootLayout() {
     saveStorageItem("fontSize", val);
   };
 
-  const handleSetIsSerif = (val: boolean) => {
-    setIsSerif(val);
-    saveStorageItem("isSerif", val);
-  };
-
   const toggleBookmark = (id: string) => {
     setBookmarks((prev) => {
       const updated = prev.includes(id)
         ? prev.filter((b) => b !== id)
         : [...prev, id];
       saveStorageItem("bookmarks", updated);
+
+      // Asynchronously synchronize bookmark state with backend server
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/bookmarks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          device_id: deviceId,
+          devotional_id: id,
+        }),
+      }).catch((e) => {
+        console.warn("Background bookmark sync deferred: client offline.", e);
+      });
+
       return updated;
     });
   };
@@ -224,104 +301,62 @@ export default function RootLayout() {
     });
   };
 
-  if (loading) {
+  if (loading || !fontsLoaded) {
     return null;
   }
 
+  const contextValue = {
+    isDark,
+    setIsDark: handleSetIsDark,
+    hasLaunched,
+    setHasLaunched: handleSetHasLaunched,
+    permissionPromptDone,
+    setPermissionPromptDone: handleSetPermissionPromptDone,
+    bookmarks,
+    toggleBookmark,
+    readingProgress,
+    saveProgress,
+    notificationsEnabled,
+    setNotificationsEnabled: handleSetNotificationsEnabled,
+    notificationTime,
+    setNotificationTime: handleSetNotificationTime,
+    fontSize,
+    setFontSize: handleSetFontSize,
+    feedbackSubmitted,
+    setFeedbackSubmitted,
+    appSettings,
+    deviceId,
+  };
+
   return (
     <SafeAreaProvider>
-      <ThemeProvider value={isDark ? CustomDarkTheme : CustomLightTheme}>
-        {showSplash ? (
-          <PeacefulSplashScreen />
-        ) : !hasLaunched ? (
-          <AppProvider
-            value={{
-              isDark,
-              setIsDark: handleSetIsDark,
-              hasLaunched,
-              setHasLaunched: handleSetHasLaunched,
-              permissionPromptDone,
-              setPermissionPromptDone: handleSetPermissionPromptDone,
-              bookmarks,
-              toggleBookmark,
-              readingProgress,
-              saveProgress,
-              notificationsEnabled,
-              setNotificationsEnabled: handleSetNotificationsEnabled,
-              notificationTime,
-              setNotificationTime: handleSetNotificationTime,
-              fontSize,
-              setFontSize: handleSetFontSize,
-              isSerif,
-              setIsSerif: handleSetIsSerif,
-              feedbackSubmitted,
-              setFeedbackSubmitted,
-            }}
-          >
-            <Onboarding onFinish={() => handleSetHasLaunched(true)} />
-          </AppProvider>
-        ) : !permissionPromptDone ? (
-          <AppProvider
-            value={{
-              isDark,
-              setIsDark: handleSetIsDark,
-              hasLaunched,
-              setHasLaunched: handleSetHasLaunched,
-              permissionPromptDone,
-              setPermissionPromptDone: handleSetPermissionPromptDone,
-              bookmarks,
-              toggleBookmark,
-              readingProgress,
-              saveProgress,
-              notificationsEnabled,
-              setNotificationsEnabled: handleSetNotificationsEnabled,
-              notificationTime,
-              setNotificationTime: handleSetNotificationTime,
-              fontSize,
-              setFontSize: handleSetFontSize,
-              isSerif,
-              setIsSerif: handleSetIsSerif,
-              feedbackSubmitted,
-              setFeedbackSubmitted,
-            }}
-          >
-            <PermissionPrompt
-              onFinish={() => handleSetPermissionPromptDone(true)}
-            />
-          </AppProvider>
-        ) : (
-          <AppProvider
-            value={{
-              isDark,
-              setIsDark: handleSetIsDark,
-              hasLaunched,
-              setHasLaunched: handleSetHasLaunched,
-              permissionPromptDone,
-              setPermissionPromptDone: handleSetPermissionPromptDone,
-              bookmarks,
-              toggleBookmark,
-              readingProgress,
-              saveProgress,
-              notificationsEnabled,
-              setNotificationsEnabled: handleSetNotificationsEnabled,
-              notificationTime,
-              setNotificationTime: handleSetNotificationTime,
-              fontSize,
-              setFontSize: handleSetFontSize,
-              isSerif,
-              setIsSerif: handleSetIsSerif,
-              feedbackSubmitted,
-              setFeedbackSubmitted,
-            }}
-          >
-            <View
-              className={`flex-1 ${isDark ? "dark bg-[#121212]" : "bg-[#FDFBF7]"}`}
-            >
-              <AppTabs />
-            </View>
-          </AppProvider>
-        )}
-      </ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider value={isDark ? CustomDarkTheme : CustomLightTheme}>
+          {showSplash ? (
+            <AppProvider value={contextValue}>
+              <PeacefulSplashScreen />
+            </AppProvider>
+          ) : !hasLaunched ? (
+            <AppProvider value={contextValue}>
+              <Onboarding onFinish={() => handleSetHasLaunched(true)} />
+            </AppProvider>
+          ) : !permissionPromptDone ? (
+            <AppProvider value={contextValue}>
+              <PermissionPrompt
+                onFinish={() => handleSetPermissionPromptDone(true)}
+              />
+            </AppProvider>
+          ) : (
+            <AppProvider value={contextValue}>
+              <View
+                className={`flex-1 ${isDark ? "dark bg-[#121212]" : "bg-[#FDFBF7]"}`}
+              >
+                <AppTabs />
+              </View>
+            </AppProvider>
+          )}
+        </ThemeProvider>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }
@@ -350,6 +385,7 @@ function PeacefulSplashScreen() {
   const insets = useSafeAreaInsets();
   const [logoOpacity] = useState(new Animated.Value(0));
   const [textOpacity] = useState(new Animated.Value(0));
+  const { appSettings } = useApp();
 
   useEffect(() => {
     Animated.sequence([
@@ -375,18 +411,28 @@ function PeacefulSplashScreen() {
         style={{ opacity: logoOpacity }}
         className="mb-6 items-center"
       >
-        {/* Soft, beautiful sun icon */}
-        <View className="w-24 h-24 rounded-full bg-[#FEF3C7] dark:bg-[#252525] justify-center items-center shadow-sm">
-          <Text className="text-5xl">🕊️</Text>
-        </View>
+        {appSettings?.app_logo_url ? (
+          <Image
+            source={{ uri: appSettings.app_logo_url }}
+            className="w-24 h-24 rounded-2xl shadow-sm"
+          />
+        ) : (
+          <View className="w-24 h-24 rounded-full bg-[#FEF3C7] dark:bg-[#252525] justify-center items-center shadow-sm">
+            <Text className="text-5xl">🕊️</Text>
+          </View>
+        )}
       </Animated.View>
 
       <Animated.View style={{ opacity: textOpacity }} className="items-center">
-        <Text className="text-3xl font-bold tracking-tight text-[#1C1917] dark:text-[#F3F4F6] mb-2 font-serif">
-          FRESH WORDS
+        <Text className="text-3xl font-bold tracking-tight text-[#1C1917] dark:text-[#F3F4F6] mb-2 font-serif text-center">
+          {appSettings?.church_name
+            ? appSettings.church_name.toUpperCase()
+            : "FRESH WORDS"}
         </Text>
-        <Text className="text-sm font-medium tracking-wide text-[#60646C] dark:text-[#B0B4BA] mb-12">
-          Growing with God every day.
+        <Text className="text-sm font-medium tracking-wide text-[#60646C] dark:text-[#B0B4BA] mb-12 text-center">
+          {appSettings?.about_us
+            ? appSettings.about_us
+            : "Growing with God every day."}
         </Text>
         <ActivityIndicator size="small" color="#1E40AF" />
       </Animated.View>

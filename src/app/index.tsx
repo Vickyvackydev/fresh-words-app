@@ -8,7 +8,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Devotional, MOCK_DEVOTIONALS, MOCK_QUOTES } from "../db/mockDb";
-import { useApp } from "./_layout";
+import { useApp } from "@/context/AppContext";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();

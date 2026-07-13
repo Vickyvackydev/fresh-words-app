@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 
 interface PermissionPromptProps {
   onFinish: () => void;
@@ -9,10 +10,14 @@ interface PermissionPromptProps {
 export default function PermissionPrompt({ onFinish }: PermissionPromptProps) {
   const insets = useSafeAreaInsets();
 
-  const handleEnable = () => {
-    // In a real app we'd call Expo Notifications requestPermissionsAsync.
-    // For this demonstration, we save approval status and proceed.
-    onFinish();
+  const handleEnable = async () => {
+    try {
+      await Notifications.requestPermissionsAsync();
+    } catch (e) {
+      console.warn("Failed to request native notification permissions:", e);
+    } finally {
+      onFinish();
+    }
   };
 
   return (

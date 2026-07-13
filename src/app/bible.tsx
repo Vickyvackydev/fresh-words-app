@@ -15,11 +15,11 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { BibleBook, BibleVerse, MOCK_BIBLE } from "../db/mockDb";
-import { useApp } from "./_layout";
+import { useApp } from "@/context/AppContext";
 
 export default function BibleScreen() {
   const insets = useSafeAreaInsets();
-  const { isDark, fontSize, isSerif } = useApp();
+  const { isDark, fontSize } = useApp();
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -372,7 +372,7 @@ export default function BibleScreen() {
                     style={{ backgroundColor: highlightColor || undefined }}
                   >
                     <Text
-                      className={`text-[#1C1917] dark:text-[#F3F4F6] leading-[1.7] ${isSerif ? "font-serif" : "font-sans"}`}
+                      className="text-[#1C1917] dark:text-[#F3F4F6] leading-[1.7] font-sans"
                       style={{ fontSize: fontSize }}
                     >
                       <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA] mr-2">
