@@ -1,7 +1,10 @@
+import { useApp } from "@/context/AppContext";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -10,14 +13,22 @@ import {
   Text,
   TextInput,
   View,
-  Image,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { useApp } from "@/context/AppContext";
 import { useSubmitFeedback } from "../api/hooks";
+
+let Notifications: any = null;
+try {
+  const isExpoGo = Constants.appOwnership === "expo";
+  if (!(Platform.OS === "android" && isExpoGo)) {
+    Notifications = require("expo-notifications");
+  }
+} catch (e) {
+  console.warn("Failed to load expo-notifications:", e);
+}
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -31,6 +42,11 @@ export default function SettingsScreen() {
     notificationTime,
     setNotificationTime,
     appSettings,
+    syncOfflineDevotionals,
+    isSyncing,
+    offlineDevotionals,
+    userName,
+    setUserName,
   } = useApp();
 
   // Settings modals
@@ -43,23 +59,72 @@ export default function SettingsScreen() {
   const [rateUsVisible, setRateUsVisible] = useState(false);
   const [aboutVisible, setAboutVisible] = useState(false);
 
-  // Simulated Offline Download Status
-  const [syncProgress, setSyncProgress] = useState(1.0); // 100% completed
-  const [syncing, setSyncing] = useState(false);
+  // Time picker modal states
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [tempHour, setTempHour] = useState("07");
+  const [tempMinute, setTempMinute] = useState("00");
 
-  const triggerSync = () => {
-    setSyncing(true);
-    setSyncProgress(0.1);
-    const interval = setInterval(() => {
-      setSyncProgress((prev) => {
-        if (prev >= 1.0) {
-          clearInterval(interval);
-          setSyncing(false);
-          return 1.0;
-        }
-        return prev + 0.15;
+  const openTimePicker = () => {
+    const parts = (notificationTime || "07:00").split(":");
+    if (parts.length >= 2) {
+      setTempHour(parts[0]);
+      setTempMinute(parts[1]);
+    }
+    setTimePickerVisible(true);
+  };
+
+  const saveTimePicker = () => {
+    const formatted = `${tempHour.padStart(2, "0")}:${tempMinute.padStart(2, "0")}`;
+    setNotificationTime(formatted);
+    setTimePickerVisible(false);
+  };
+
+  const triggerSync = async () => {
+    try {
+      await syncOfflineDevotionals();
+    } catch (e) {
+      alert("Failed to sync devotionals: " + (e as any).message);
+    }
+  };
+
+  const triggerTestNotification = async () => {
+    if (!Notifications) {
+      alert(
+        "Notifications are disabled in Expo Go Android. To test notifications, please run on an emulator or a development build, or use an iOS device.",
+      );
+      return;
+    }
+    try {
+      const activeCategory = appSettings?.daily_deliverance_enabled
+        ? "Daily Deliverance"
+        : appSettings?.yearly_devotional_enabled
+          ? "Yearly Devotional"
+          : "Daily Deliverance";
+      const catDevs = offlineDevotionals[activeCategory] || [];
+      const firstDev = catDevs[0];
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: firstDev ? (firstDev.title || "Test Daily Devotional 🕊️") : "Test Daily Devotional 🕊️",
+          body: firstDev
+            ? "Today's devotional is ready — Tap to read now"
+            : "This is your test notification! Tap to open.",
+          data: {
+            category: firstDev ? firstDev.category : "Daily Deliverance",
+            devotionalId: firstDev ? firstDev.id : "",
+          },
+        },
+        trigger: {
+          type: "timeInterval",
+          seconds: 5,
+        } as any,
       });
-    }, 300);
+      alert(
+        "Test notification scheduled! Put the app in background (go to home screen) immediately.",
+      );
+    } catch (e) {
+      alert("Failed to schedule test notification: " + (e as any).message);
+    }
   };
 
   const submitFeedbackMutation = useSubmitFeedback();
@@ -115,12 +180,36 @@ export default function SettingsScreen() {
         </Text>
 
         {/* Section 1: Appearance */}
-        <Text className="text-xs font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
+        <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
           Appearance
         </Text>
         <View
           className={`bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6`}
         >
+          {/* Profile Name */}
+          <View className="flex-row justify-between items-center">
+            <View className="flex-1 mr-4">
+              <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                Your Name
+              </Text>
+              <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
+                Used for in-app greetings
+              </Text>
+            </View>
+            <TextInput
+              value={userName}
+              onChangeText={setUserName}
+              placeholder="e.g. Victor"
+              placeholderTextColor={isDark ? "#888" : "#A3A3A3"}
+              className="w-32 h-9 px-3 bg-[#FAF8F5] dark:bg-[#252527] border border-[#E0E1E6] dark:border-[#3E4249] rounded-xl text-sm text-[#1C1917] dark:text-[#F3F4F6] text-right font-semibold"
+              maxLength={15}
+              autoCorrect={false}
+            />
+          </View>
+
+          {/* Divider */}
+          <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135]" />
+
           {/* Theme */}
           <View className="flex-row justify-between items-center">
             <View>
@@ -171,11 +260,10 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
           </View>
-
         </View>
 
         {/* Section 2: Notifications */}
-        <Text className="text-xs font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
+        <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
           Reminders
         </Text>
         <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6">
@@ -198,7 +286,10 @@ export default function SettingsScreen() {
           {notificationsEnabled && (
             <>
               <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135]" />
-              <View className="flex-row justify-between items-center">
+              <Pressable
+                onPress={openTimePicker}
+                className="flex-row justify-between items-center active:opacity-75 py-1"
+              >
                 <View>
                   <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
                     Reminder Time
@@ -207,48 +298,69 @@ export default function SettingsScreen() {
                     Current scheduled hour
                   </Text>
                 </View>
-                <TextInput
-                  value={notificationTime}
-                  onChangeText={setNotificationTime}
-                  maxLength={5}
-                  keyboardType="numbers-and-punctuation"
-                  className="w-16 h-8 text-center bg-[#FAF8F5] dark:bg-[#2E3135] text-sm font-semibold rounded-lg text-[#1C1917] dark:text-[#F3F4F6] border border-[#E0E1E6] dark:border-[#3E4249]"
-                />
-              </View>
+                <View className="px-3.5 py-1.5 bg-[#FAF8F5] dark:bg-[#2E3135] rounded-xl border border-[#E0E1E6] dark:border-[#3E4249]">
+                  <Text className="text-sm font-bold text-[#1E40AF] dark:text-[#60A5FA]">
+                    {notificationTime || "07:00"}
+                  </Text>
+                </View>
+              </Pressable>
             </>
           )}
         </View>
 
         {/* Section 3: Offline Storage */}
-        <Text className="text-xs font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
+        <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
           Offline Storage
         </Text>
-        <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 space-y-4 mb-6">
+        <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6">
           <View className="flex-row justify-between items-center">
             <View className="flex-1 mr-4">
               <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                Yearly Devotional Status
+                Offline Devotional Cache
               </Text>
-              {syncing ? (
-                <View className="w-full bg-[#E0E1E6] dark:bg-[#2E3135] h-1.5 rounded-full overflow-hidden mt-2">
-                  <View
-                    className="bg-[#1E40AF] h-full"
-                    style={{ width: `${syncProgress * 100}%` }}
-                  />
+              {isSyncing ? (
+                <View className="flex-row items-center gap-x-2 mt-2">
+                  <ActivityIndicator size="small" color="#1E40AF" />
+                  <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
+                    Synchronizing devotionals...
+                  </Text>
                 </View>
               ) : (
                 <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mt-0.5">
-                  Package active (12.4 MB on disk)
+                  All active packages cached offline
                 </Text>
               )}
             </View>
             <Pressable
               onPress={triggerSync}
-              disabled={syncing}
-              className={`py-1.5 px-3 rounded-lg active:opacity-75 ${syncing ? "bg-transparent" : "bg-[#E0E1E6] dark:bg-[#2E3135]"}`}
+              disabled={isSyncing}
+              className={`py-1.5 px-3 rounded-lg active:opacity-75 ${isSyncing ? "bg-transparent" : "bg-[#E0E1E6] dark:bg-[#2E3135]"}`}
             >
               <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA]">
-                {syncing ? "Syncing..." : "Re-sync"}
+                {isSyncing ? "Syncing..." : "Re-sync"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Divider */}
+          <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135]" />
+
+          {/* Notification testing */}
+          <View className="flex-row justify-between items-center">
+            <View className="flex-1 mr-4">
+              <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                Notification Testing
+              </Text>
+              <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mt-0.5">
+                Trigger a test daily reminder in 5 seconds
+              </Text>
+            </View>
+            <Pressable
+              onPress={triggerTestNotification}
+              className="py-1.5 px-3 rounded-lg bg-[#E0E1E6] dark:bg-[#2E3135] active:opacity-75"
+            >
+              <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA]">
+                Test (5s)
               </Text>
             </Pressable>
           </View>
@@ -455,7 +567,8 @@ export default function SettingsScreen() {
             </View>
 
             <Text className="text-sm leading-6 text-[#4B5563] dark:text-[#D1D5DB] text-center">
-              {appSettings?.about_us || "Our mission is to help people grow closer to God daily by providing distraction-free spiritual materials, scriptures, and reminders entirely offline."}
+              {appSettings?.about_us ||
+                "Our mission is to help people grow closer to God daily by providing distraction-free spiritual materials, scriptures, and reminders entirely offline."}
             </Text>
 
             <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135] my-4" />
@@ -487,6 +600,104 @@ export default function SettingsScreen() {
                   Antigravity Labs
                 </Text>
               </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* D. Custom Time Picker Modal */}
+      <Modal visible={timePickerVisible} transparent={true} animationType="slide">
+        <View className="flex-1 bg-black/40 justify-end">
+          <View
+            className="bg-[#FDFBF7] dark:bg-[#1E1E1E] rounded-t-3xl border-t border-[#E0E1E6] dark:border-[#2E3135] p-6 space-y-4"
+            style={{ paddingBottom: insets.bottom + 24 }}
+          >
+            <View className="flex-row justify-between items-center mb-2">
+              <Text className="text-lg font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
+                Select Reminder Time
+              </Text>
+              <Pressable onPress={() => setTimePickerVisible(false)}>
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color={isDark ? "#B0B4BA" : "#60646C"}
+                />
+              </Pressable>
+            </View>
+
+            {/* Selector Grid */}
+            <View className="flex-row h-56 gap-x-4">
+              {/* Hour Column */}
+              <View className="flex-1">
+                <Text className="text-[10px] font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-2 text-center">
+                  Hour
+                </Text>
+                <ScrollView showsVerticalScrollIndicator={false} className="bg-[#FAF8F5] dark:bg-[#1C1C1E] rounded-2xl border border-[#E0E1E6] dark:border-[#2E3135] p-2">
+                  {Array.from({ length: 24 }, (_, i) => {
+                    const hStr = i.toString().padStart(2, "0");
+                    const isSelected = tempHour === hStr;
+                    return (
+                      <Pressable
+                        key={hStr}
+                        onPress={() => setTempHour(hStr)}
+                        className={`py-2.5 rounded-xl items-center mb-1.5 active:scale-95 ${
+                          isSelected ? "bg-[#1E40AF] dark:bg-[#2563EB]" : "bg-transparent"
+                        }`}
+                      >
+                        <Text className={`text-sm font-semibold ${isSelected ? "text-white" : "text-[#1C1917] dark:text-[#F3F4F6]"}`}>
+                          {hStr}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Minute Column */}
+              <View className="flex-1">
+                <Text className="text-[10px] font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-2 text-center">
+                  Minute
+                </Text>
+                <ScrollView showsVerticalScrollIndicator={false} className="bg-[#FAF8F5] dark:bg-[#1C1C1E] rounded-2xl border border-[#E0E1E6] dark:border-[#2E3135] p-2">
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const mVal = (i * 5).toString().padStart(2, "0");
+                    const isSelected = tempMinute === mVal;
+                    return (
+                      <Pressable
+                        key={mVal}
+                        onPress={() => setTempMinute(mVal)}
+                        className={`py-2.5 rounded-xl items-center mb-1.5 active:scale-95 ${
+                          isSelected ? "bg-[#1E40AF] dark:bg-[#2563EB]" : "bg-transparent"
+                        }`}
+                      >
+                        <Text className={`text-sm font-semibold ${isSelected ? "text-white" : "text-[#1C1917] dark:text-[#F3F4F6]"}`}>
+                          {mVal}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+
+            {/* Confirm Actions */}
+            <View className="flex-row gap-x-3 pt-2">
+              <Pressable
+                onPress={() => setTimePickerVisible(false)}
+                className="flex-1 h-11 bg-[#FAF8F5] dark:bg-[#2E3135] border border-[#E0E1E6] dark:border-[#3E4249] rounded-xl items-center justify-center active:bg-[#F3EFE6]"
+              >
+                <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={saveTimePicker}
+                className="flex-1 h-11 bg-[#1E40AF] dark:bg-[#2563EB] rounded-xl items-center justify-center active:opacity-90"
+              >
+                <Text className="text-white text-sm font-semibold">
+                  Confirm
+                </Text>
+              </Pressable>
             </View>
           </View>
         </View>

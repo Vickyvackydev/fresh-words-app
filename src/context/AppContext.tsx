@@ -21,6 +21,13 @@ export interface AppContextType {
   setFeedbackSubmitted: (sub: boolean) => void;
   appSettings: any;
   deviceId: string;
+  offlineDevotionals: Record<string, any[]>;
+  syncOfflineDevotionals: () => Promise<void>;
+  isSyncing: boolean;
+  userName: string;
+  setUserName: (name: string) => void;
+  tappedDevotional: any | null;
+  setTappedDevotional: (devotional: any | null) => void;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

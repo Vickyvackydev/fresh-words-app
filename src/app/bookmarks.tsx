@@ -1,4 +1,5 @@
 import DevotionReader from "@/components/devotion-reader";
+import { useApp } from "@/context/AppContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Pressable, ScrollView, Share, Text, View } from "react-native";
@@ -6,19 +7,18 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { Devotional, MOCK_DEVOTIONALS } from "../db/mockDb";
-import { useApp } from "@/context/AppContext";
+import { Devotional } from "../db/mockDb";
 
 type FilterCategory =
   | "All"
   | "Daily Deliverance"
-  | "Holiness Devotional"
-  | "Prayer Devotional"
-  | "2026 Devotional";
+  | "Holiness"
+  | "Prayer"
+  | "Yearly Devotional";
 
 export default function BookmarksScreen() {
   const insets = useSafeAreaInsets();
-  const { isDark, bookmarks, toggleBookmark } = useApp();
+  const { isDark, bookmarks, toggleBookmark, offlineDevotionals } = useApp();
 
   const [activeCategory, setActiveCategory] = useState<FilterCategory>("All");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
@@ -44,8 +44,33 @@ export default function BookmarksScreen() {
     }
   };
 
+  // Flatten all offline devotionals across categories and map to UI schema
+  const allOfflineDevs: Devotional[] = Object.values(offlineDevotionals || {})
+    .flat()
+    .map((d: any) => ({
+      id: d.id,
+      category: d.category,
+      title: d.title,
+      date: `Day ${d.default_day}`,
+      readingTime: Math.ceil(((d.body || "").length || 1000) / 800),
+      scriptureRef: d.scripture_reference || "",
+      scriptureText: d.scripture_quote || "",
+      body:
+        typeof d.body === "string"
+          ? d.body.split("\n\n")
+          : Array.isArray(d.body)
+            ? d.body
+            : [],
+      prayer: d.prayer || "",
+      reflection: d.reflection || "",
+      actionPoints:
+        typeof d.action_points === "string"
+          ? JSON.parse(d.action_points || "[]")
+          : [],
+    }));
+
   // Filter & Sort Bookmarks
-  let filtered = MOCK_DEVOTIONALS.filter((dev) => bookmarks.includes(dev.id));
+  let filtered = allOfflineDevs.filter((dev) => bookmarks.includes(dev.id));
 
   if (activeCategory !== "All") {
     filtered = filtered.filter((dev) => dev.category === activeCategory);
@@ -103,9 +128,9 @@ export default function BookmarksScreen() {
             [
               "All",
               "Daily Deliverance",
-              "Holiness Devotional",
-              "Prayer Devotional",
-              "2026 Devotional",
+              "Holiness",
+              "Prayer",
+              "Yearly Devotional",
             ] as FilterCategory[]
           ).map((cat) => {
             const isActive = activeCategory === cat;
@@ -160,7 +185,7 @@ export default function BookmarksScreen() {
               >
                 {/* Header details */}
                 <View className="flex-row justify-between items-center mb-2">
-                  <Text className="text-[10px] font-bold text-[#1E40AF] dark:text-[#60A5FA] uppercase tracking-wider">
+                  <Text className="text-[10px] font-bold text-[#1E40AF] dark:text-[#60A5FA] tracking-wider">
                     {dev.category}
                   </Text>
                   <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
@@ -173,8 +198,8 @@ export default function BookmarksScreen() {
                   onPress={() => openDevotional(dev)}
                   className="active:opacity-75"
                 >
-                  <Text className="text-lg font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif mb-2 leading-tight">
-                    {dev.title}
+                  <Text className="text-lg font-bold capitalize text-[#1C1917] dark:text-[#F3F4F6] font-serif mb-2 leading-tight">
+                    {dev.title.toLowerCase()}
                   </Text>
                   <Text
                     className="text-sm leading-5 text-[#60646C] dark:text-[#B0B4BA] mb-4"
@@ -193,7 +218,7 @@ export default function BookmarksScreen() {
                     <Ionicons
                       name="share-outline"
                       size={16}
-                      className="text-[#60646C] dark:text-[#B0B4BA]"
+                      color={isDark ? "#B0B4BA" : "#60646C"}
                     />
                   </Pressable>
 
@@ -204,7 +229,7 @@ export default function BookmarksScreen() {
                     <Ionicons
                       name="trash-outline"
                       size={16}
-                      className="text-[#EF4444] dark:text-[#FCA5A5]"
+                      color={isDark ? "#FCA5A5" : "#EF4444"}
                     />
                   </Pressable>
                 </View>

@@ -1,7 +1,17 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+
+let Notifications: any = null;
+try {
+  const isExpoGo = Constants.appOwnership === 'expo';
+  if (!(Platform.OS === 'android' && isExpoGo)) {
+    Notifications = require('expo-notifications');
+  }
+} catch (e) {
+  console.warn("Failed to load expo-notifications:", e);
+}
 
 interface PermissionPromptProps {
   onFinish: () => void;
@@ -12,7 +22,9 @@ export default function PermissionPrompt({ onFinish }: PermissionPromptProps) {
 
   const handleEnable = async () => {
     try {
-      await Notifications.requestPermissionsAsync();
+      if (Notifications) {
+        await Notifications.requestPermissionsAsync();
+      }
     } catch (e) {
       console.warn("Failed to request native notification permissions:", e);
     } finally {

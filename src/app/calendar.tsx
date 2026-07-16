@@ -6,47 +6,106 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { Devotional, MOCK_DEVOTIONALS } from "../db/mockDb";
+import { Devotional } from "../db/mockDb";
 import { useApp } from "@/context/AppContext";
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
-  const { bookmarks, toggleBookmark, isDark } = useApp();
+  const { bookmarks, toggleBookmark, isDark, appSettings, offlineDevotionals, readingProgress } = useApp();
 
   // Reader state
   const [selectedDevotional, setSelectedDevotional] =
     useState<Devotional | null>(null);
   const [readerVisible, setReaderVisible] = useState(false);
 
-  // Month configurations
-  const monthName = "July 2026";
-  const totalDays = 31;
-  const startDayOffset = 3; // July 1, 2026 is a Wednesday (Sunday=0, Monday=1, Tuesday=2, Wednesday=3)
+  const getActiveCategory = () => {
+    if (!appSettings) return "Daily Deliverance";
+    if (appSettings.daily_deliverance_enabled) return "Daily Deliverance";
+    if (appSettings.yearly_devotional_enabled) return "Yearly Devotional";
+    if (appSettings.holiness_enabled) return "Holiness";
+    if (appSettings.prayer_enabled) return "Prayer";
+    return "Daily Deliverance";
+  };
 
-  // Status mapping for July 2026
-  // Completed: July 1, 2, 4
-  // Missed: July 3
-  // Today: July 5
-  // Future: July 6 and after
-  const todayDayNum = 5;
+  const activeCategory = getActiveCategory();
+  const catDevotionals = offlineDevotionals[activeCategory] || [];
 
-  const getDayStatus = (dayNum: number) => {
+  // Determine current month / year dynamically
+  const now = new Date();
+  const currentMonth = now.getMonth(); // 0-indexed
+  const currentYear = now.getFullYear();
+  const todayDayNum = now.getDate();
+
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const monthName = `${months[currentMonth]} ${currentYear}`;
+
+  // Calculate days in current month
+  const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+  // Calculate first day weekday offset
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  const startDayOffset = firstDay.getDay(); // 0 is Sunday, 1 is Monday...
+
+  const getDayOfYear = (date: Date): number => {
+    const start = new Date(date.getFullYear(), 0, 0);
+    const diff = date.getTime() - start.getTime();
+    const oneDay = 1000 * 60 * 60 * 24;
+    return Math.floor(diff / oneDay);
+  };
+
+  const getDayStatus = (dayNum: number): "future" | "today" | "completed" | "missed" => {
     if (dayNum > todayDayNum) return "future";
     if (dayNum === todayDayNum) return "today";
-    if (dayNum === 3) return "missed"; // July 3 is missed
-    return "completed"; // July 1, 2, 4 are completed
+
+    const dateObj = new Date(currentYear, currentMonth, dayNum);
+    const dayOfYear = getDayOfYear(dateObj);
+    const devIndex = (dayOfYear - 1) % (catDevotionals.length || 1);
+    const cachedDevotional = catDevotionals[devIndex];
+
+    if (cachedDevotional) {
+      const isRead = readingProgress && readingProgress[cachedDevotional.id] !== undefined;
+      if (isRead) return "completed";
+    }
+
+    return "missed";
   };
 
   const handleDatePress = (dayNum: number) => {
+    if (catDevotionals.length === 0) return;
     const status = getDayStatus(dayNum);
-    if (status === "future") return; // disabled
+    if (status === "future") return;
 
-    // Find devotional for this date
-    const dateStr = `2026-07-${dayNum.toString().padStart(2, "0")}`;
-    const dev = MOCK_DEVOTIONALS.find((d) => d.date === dateStr);
+    // Resolve date and Day of Year index
+    const dateObj = new Date(currentYear, currentMonth, dayNum);
+    const dayOfYear = getDayOfYear(dateObj);
+    const devIndex = (dayOfYear - 1) % catDevotionals.length;
+    const cachedDevotional = catDevotionals[devIndex];
 
-    if (dev) {
-      setSelectedDevotional(dev);
+    if (cachedDevotional) {
+      const formatted: Devotional = {
+        id: cachedDevotional.id,
+        category: cachedDevotional.category,
+        title: cachedDevotional.title,
+        date: `Day ${cachedDevotional.default_day || (devIndex + 1)}`,
+        readingTime: Math.ceil(((cachedDevotional.body || "").length || 1000) / 800),
+        scriptureRef: cachedDevotional.scripture_reference || "",
+        scriptureText: cachedDevotional.scripture_quote || "",
+        body: typeof cachedDevotional.body === "string"
+          ? cachedDevotional.body.split("\n\n")
+          : Array.isArray(cachedDevotional.body)
+          ? cachedDevotional.body
+          : [],
+        prayer: cachedDevotional.prayer || "",
+        reflection: cachedDevotional.reflection || "",
+        actionPoints: typeof cachedDevotional.action_points === "string"
+          ? JSON.parse(cachedDevotional.action_points || "[]")
+          : Array.isArray(cachedDevotional.actionPoints)
+          ? cachedDevotional.actionPoints
+          : [],
+      };
+      setSelectedDevotional(formatted);
       setReaderVisible(true);
     }
   };

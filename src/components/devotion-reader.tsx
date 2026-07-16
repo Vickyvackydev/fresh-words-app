@@ -12,8 +12,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Devotional } from "../db/mockDb";
 import { getBaseUrl } from "../api/client";
+import { Devotional } from "../db/mockDb";
 
 interface DevotionReaderProps {
   devotional: Devotional | null;
@@ -26,7 +26,7 @@ interface DevotionReaderProps {
 }
 
 export default function DevotionReader({
-  devotional,
+  devotional: rawDevotional,
   visible,
   onClose,
   onToggleBookmark,
@@ -35,12 +35,11 @@ export default function DevotionReader({
   onPrev,
 }: DevotionReaderProps) {
   const insets = useSafeAreaInsets();
-  const [fontSize, setFontSize] = useState<number>(21);
+  const { isDark, fontSize, setFontSize } = useApp();
   const [showControls, setShowControls] = useState<boolean>(false);
   const [checkedActions, setCheckedActions] = useState<Record<string, boolean>>(
     {},
   );
-  const { isDark } = useApp();
   // Animations
   const bookmarkScale = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(
@@ -49,14 +48,14 @@ export default function DevotionReader({
 
   // Load checklist items
   useEffect(() => {
-    if (devotional) {
+    if (rawDevotional) {
       setCheckedActions({});
     }
-  }, [devotional]);
+  }, [rawDevotional]);
 
   // Track devotional read events
   useEffect(() => {
-    if (visible && devotional) {
+    if (visible && rawDevotional) {
       const baseUrl = getBaseUrl();
       fetch(`${baseUrl}/devotionals/read`, {
         method: "POST",
@@ -64,13 +63,13 @@ export default function DevotionReader({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          devotional_id: devotional.id,
+          devotional_id: rawDevotional.id,
         }),
       }).catch((e) => {
         console.warn("Deferred view tracking: client offline.", e);
       });
     }
-  }, [visible, devotional?.id]);
+  }, [visible, rawDevotional?.id]);
 
   useEffect(() => {
     if (visible) {
@@ -89,7 +88,35 @@ export default function DevotionReader({
     }
   }, [visible]);
 
-  if (!devotional) return null;
+  if (!rawDevotional) return null;
+
+  const devotional = {
+    ...rawDevotional,
+    scriptureRef:
+      rawDevotional.scriptureRef ||
+      (rawDevotional as any).scripture_reference ||
+      "",
+    scriptureText:
+      rawDevotional.scriptureText ||
+      (rawDevotional as any).scripture_quote ||
+      "",
+    body: Array.isArray(rawDevotional.body)
+      ? rawDevotional.body
+      : typeof rawDevotional.body === "string"
+        ? (rawDevotional.body as string).split("\n\n")
+        : [],
+    actionPoints: Array.isArray(rawDevotional.actionPoints)
+      ? rawDevotional.actionPoints
+      : typeof (rawDevotional as any).action_points === "string"
+        ? JSON.parse((rawDevotional as any).action_points || "[]")
+        : [],
+    date:
+      rawDevotional.date || `Day ${(rawDevotional as any).default_day || 1}`,
+    readingTime:
+      rawDevotional.readingTime ||
+      Math.ceil(((rawDevotional.body || "").length || 1000) / 800) ||
+      2,
+  };
 
   const handleShare = async () => {
     try {
@@ -151,7 +178,7 @@ export default function DevotionReader({
             <Ionicons
               name="chevron-back"
               size={24}
-              className="text-[#1C1917] dark:text-[#F3F4F6]"
+              color={isDark ? "#F3F4F6" : "#1C1917"}
             />
             <Text className="text-sm font-medium text-[#1C1917] dark:text-[#F3F4F6] ml-1">
               Today
@@ -159,7 +186,7 @@ export default function DevotionReader({
           </Pressable>
 
           <Text
-            className="text-xs font-semibold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] max-w-[150px]"
+            className="text-xs font-semibold tracking-wider text-[#60646C] dark:text-[#B0B4BA] max-w-[150px]"
             numberOfLines={1}
           >
             {devotional.category}
@@ -339,7 +366,7 @@ export default function DevotionReader({
               Action Points
             </Text>
             <View className="space-y-3">
-              {devotional.actionPoints.map((action, idx) => {
+              {devotional.actionPoints.map((action: string, idx: number) => {
                 const key = `${devotional.id}-${idx}`;
                 const checked = !!checkedActions[key];
                 return (

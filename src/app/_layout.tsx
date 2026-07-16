@@ -1,4 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useColorScheme as useNativeWindColorScheme } from "nativewind";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Animated, Image, Text, View } from "react-native";
+import { getBaseUrl } from "../api/client";
 
 // Safe storage wrapper — prevents app crash when native module is null
 // (can happen on first cold-boot in Expo Go before native modules register)
@@ -25,10 +29,6 @@ const safeStorage = {
     }
   },
 };
-import { useColorScheme as useNativeWindColorScheme } from "nativewind";
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Animated, Image, Text, View } from "react-native";
-import { getBaseUrl } from "../api/client";
 
 import AppTabs from "@/components/app-tabs";
 import Onboarding from "@/components/onboarding";
@@ -39,21 +39,33 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Constants from "expo-constants";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
+import { Platform } from "react-native";
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import "../../global.css";
+import { scheduleDailyNotifications } from "../utils/notifications";
+// InMemory cache for native platforms, localStorage for web
+import { AppContext, useApp } from "../context/AppContext";
+
+let Notifications: any = null;
+try {
+  const isExpoGo = Constants.appOwnership === "expo";
+  if (!(Platform.OS === "android" && isExpoGo)) {
+    Notifications = require("expo-notifications");
+  }
+} catch (e) {
+  console.warn("Failed to load expo-notifications:", e);
+}
 
 const queryClient = new QueryClient();
 
 // Prevent auto hiding splash screen during initialization
 SplashScreen.preventAutoHideAsync().catch(() => {});
-
-// InMemory cache for native platforms, localStorage for web
-import { AppContext, useApp } from "../context/AppContext";
 
 const CustomLightTheme = {
   ...NavigationDefaultTheme,
@@ -94,6 +106,53 @@ export default function RootLayout() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [appSettings, setAppSettings] = useState<any>(null);
   const [deviceId, setDeviceId] = useState<string>("");
+  const [offlineDevotionals, setOfflineDevotionals] = useState<
+    Record<string, any[]>
+  >({});
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [tappedDevotional, setTappedDevotional] = useState<any | null>(null);
+  const [userName, setUserNameState] = useState("");
+
+  const handleSetUserName = async (name: string) => {
+    setUserNameState(name);
+    await safeStorage.setItem("userName", name);
+  };
+
+  // Schedule daily reminders offline-first when settings or local cache updates
+  useEffect(() => {
+    if (
+      appSettings &&
+      Object.keys(offlineDevotionals).length > 0 &&
+      notificationsEnabled
+    ) {
+      scheduleDailyNotifications(
+        appSettings,
+        offlineDevotionals,
+        notificationTime,
+      ).catch((err) => {
+        console.warn("Failed to schedule notifications:", err);
+      });
+    }
+  }, [appSettings, offlineDevotionals, notificationsEnabled, notificationTime]);
+
+  // Listen for clicked local notifications to route the user
+  useEffect(() => {
+    if (!Notifications) return;
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response: any) => {
+        const data = response.notification.request.content.data as any;
+        if (data && data.devotionalId) {
+          const cat = data.category as string;
+          const list = (offlineDevotionals as any)[cat] || [];
+          const devotional = list.find((d: any) => d.id === data.devotionalId);
+          if (devotional) {
+            setTappedDevotional(devotional);
+          }
+        }
+      },
+    );
+    return () => subscription.remove();
+  }, [offlineDevotionals]);
 
   // App loading state
   const [loading, setLoading] = useState(true);
@@ -139,6 +198,8 @@ export default function RootLayout() {
           "fontSize",
           "deviceId",
           "appSettings",
+          "offlineDevotionals",
+          "userName",
         ];
         const stores = await safeStorage.multiGet(keys);
         const storeMap: Record<string, string | null> = {};
@@ -157,6 +218,7 @@ export default function RootLayout() {
         if (storeMap.notificationTime)
           setNotificationTime(storeMap.notificationTime);
         if (storeMap.fontSize) setFontSize(parseInt(storeMap.fontSize, 10));
+        if (storeMap.userName) setUserNameState(storeMap.userName);
 
         let storedDark = storeMap.isDark;
         if (storedDark !== null) {
@@ -176,9 +238,48 @@ export default function RootLayout() {
         }
         setDeviceId(devId);
 
-        // Load offline cached settings
+        // Load offline cached settings & devotionals
+        let devsObj: Record<string, any[]> = {};
+        let loadedSettings: any = null;
         if (storeMap.appSettings) {
-          setAppSettings(JSON.parse(storeMap.appSettings));
+          loadedSettings = JSON.parse(storeMap.appSettings);
+          setAppSettings(loadedSettings);
+        }
+        if (storeMap.offlineDevotionals) {
+          devsObj = JSON.parse(storeMap.offlineDevotionals);
+          setOfflineDevotionals(devsObj);
+        }
+
+        // Initialize default reminder time from active category settings if not customized
+        if (!storeMap.notificationTime && loadedSettings) {
+          setNotificationTime(getCategoryTime(loadedSettings));
+        }
+
+        // Check if app was launched by tapping a notification
+        if (Notifications) {
+          try {
+            const launchResponse =
+              await Notifications.getLastNotificationResponseAsync();
+            if (launchResponse) {
+              const data = launchResponse.notification.request.content
+                .data as any;
+              if (data && data.devotionalId) {
+                const cat = data.category as string;
+                const list = devsObj[cat] || [];
+                const devotional = list.find(
+                  (d: any) => d.id === data.devotionalId,
+                );
+                if (devotional) {
+                  setTappedDevotional(devotional);
+                }
+              }
+            }
+          } catch (launchNotifErr) {
+            console.warn(
+              "Failed to check last notification launch:",
+              launchNotifErr,
+            );
+          }
         }
 
         // Fetch settings from server
@@ -186,18 +287,54 @@ export default function RootLayout() {
           const baseUrl = getBaseUrl();
           const response = await fetch(`${baseUrl}/settings`);
           const json = await response.json();
-          if (json.status === "success" && json.data) {
+          if (json.success && json.data) {
             setAppSettings(json.data);
-            await safeStorage.setItem(
-              "appSettings",
-              JSON.stringify(json.data),
-            );
+            await safeStorage.setItem("appSettings", JSON.stringify(json.data));
+            // If user hasn't set their own reminder time, initialize/sync to active category's time from server settings!
+            const storedTime = await safeStorage.getItem("notificationTime");
+            if (!storedTime) {
+              setNotificationTime(getCategoryTime(json.data));
+            }
           }
         } catch (fetchErr) {
           console.warn(
             "Failed to fetch settings from server, using cached settings:",
             fetchErr,
           );
+        }
+
+        // Auto-sync devotionals on launch
+        try {
+          const baseUrl = getBaseUrl();
+          const categories = [
+            "Daily Deliverance",
+            "Holiness",
+            "Prayer",
+            "Yearly Devotional",
+          ];
+          const updatedCache: Record<string, any[]> = {};
+          for (const cat of categories) {
+            try {
+              const res = await fetch(
+                `${baseUrl}/packages/active?category=${encodeURIComponent(cat)}`,
+              );
+              const json = await res.json();
+              if (json.success && Array.isArray(json.data)) {
+                updatedCache[cat] = json.data;
+              }
+            } catch (catErr) {
+              // silently ignore failures on single category
+            }
+          }
+          if (Object.keys(updatedCache).length > 0) {
+            setOfflineDevotionals((prev) => {
+              const merged = { ...prev, ...updatedCache };
+              safeStorage.setItem("offlineDevotionals", JSON.stringify(merged));
+              return merged;
+            });
+          }
+        } catch (syncErr) {
+          console.warn("Failed to auto-sync devotionals on launch:", syncErr);
         }
 
         // Sync bookmarks from backend
@@ -207,7 +344,7 @@ export default function RootLayout() {
             `${baseUrl}/bookmarks?device_id=${devId}`,
           );
           const json = await response.json();
-          if (json.status === "success" && Array.isArray(json.data)) {
+          if (json.success && Array.isArray(json.data)) {
             const serverBookmarkIds = json.data.map((d: any) => d.id);
             setBookmarks(serverBookmarkIds);
             await safeStorage.setItem(
@@ -265,6 +402,69 @@ export default function RootLayout() {
   const handleSetFontSize = (val: number) => {
     setFontSize(val);
     saveStorageItem("fontSize", val);
+  };
+
+  const syncOfflineDevotionals = async () => {
+    setIsSyncing(true);
+    try {
+      const baseUrl = getBaseUrl();
+      const categories = [
+        "Daily Deliverance",
+        "Holiness",
+        "Prayer",
+        "Yearly Devotional",
+      ];
+      const updatedCache: Record<string, any[]> = {};
+      let successCount = 0;
+      let lastError: string | null = null;
+
+      for (const cat of categories) {
+        try {
+          const res = await fetch(
+            `${baseUrl}/packages/active?category=${encodeURIComponent(cat)}`,
+          );
+          const json = await res.json();
+          if (res.ok && json.success && Array.isArray(json.data)) {
+            updatedCache[cat] = json.data;
+            successCount++;
+          } else {
+            console.warn(
+              `Failed to sync category ${cat}: ${json.message || "Unknown API response"}`,
+            );
+            if (res.status !== 404) {
+              lastError = json.message || `HTTP ${res.status}`;
+            }
+          }
+        } catch (catErr: any) {
+          console.warn(`Failed to sync category ${cat}:`, catErr);
+          lastError = catErr.message || String(catErr);
+        }
+      }
+
+      setOfflineDevotionals((prev) => {
+        const merged = { ...prev, ...updatedCache };
+        const stringValue = JSON.stringify(merged);
+        safeStorage.setItem("offlineDevotionals", stringValue);
+        return merged;
+      });
+
+      if (successCount === 0 && lastError) {
+        alert(
+          `Sync failed. Please check connection to local backend at ${baseUrl}.\nError: ${lastError}`,
+        );
+      } else if (successCount > 0) {
+        alert(`Successfully synced ${successCount} devotional package(s)!`);
+      } else {
+        alert(
+          "Sync checked successfully, but no active published packages were found in the database. Please publish packages in the admin panel.",
+        );
+      }
+    } catch (err: any) {
+      console.error("Failed to sync devotionals:", err);
+      alert("Failed to sync devotionals: " + (err.message || String(err)));
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const toggleBookmark = (id: string) => {
@@ -326,6 +526,13 @@ export default function RootLayout() {
     setFeedbackSubmitted,
     appSettings,
     deviceId,
+    offlineDevotionals,
+    syncOfflineDevotionals,
+    isSyncing,
+    userName,
+    setUserName: handleSetUserName,
+    tappedDevotional,
+    setTappedDevotional,
   };
 
   return (
@@ -438,4 +645,39 @@ function PeacefulSplashScreen() {
       </Animated.View>
     </View>
   );
+}
+
+function getCategoryTime(settings: any): string {
+  if (!settings) return "08:00";
+  let rawTime = "08:00 AM";
+  if (settings.daily_deliverance_enabled && settings.daily_deliverance_time) {
+    rawTime = settings.daily_deliverance_time;
+  } else if (
+    settings.yearly_devotional_enabled &&
+    settings.yearly_devotional_time
+  ) {
+    rawTime = settings.yearly_devotional_time;
+  } else if (settings.holiness_enabled && settings.holiness_time) {
+    rawTime = settings.holiness_time;
+  } else if (settings.prayer_enabled && settings.prayer_time) {
+    rawTime = settings.prayer_time;
+  }
+
+  try {
+    const isPM = rawTime.toUpperCase().includes("PM");
+    const clean = rawTime
+      .toUpperCase()
+      .replace("AM", "")
+      .replace("PM", "")
+      .trim();
+    const parts = clean.split(":");
+    if (parts.length >= 2) {
+      let h = parseInt(parts[0], 10);
+      const m = parts[1].padStart(2, "0");
+      if (isPM && h < 12) h += 12;
+      else if (!isPM && h === 12) h = 0;
+      return `${h.toString().padStart(2, "0")}:${m}`;
+    }
+  } catch (e) {}
+  return "08:00";
 }
