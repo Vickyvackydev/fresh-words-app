@@ -16,7 +16,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import BIBLE_RAW_DATA from "../db/bible-kjv.json";
+// Lazy-loaded BIBLE_RAW_DATA to prevent app startup memory overload and crash
 import { BibleBook, BibleVerse } from "../db/mockDb";
 
 const BIBLE_BOOKS = [
@@ -88,8 +88,12 @@ const BIBLE_BOOKS = [
   { abbrev: "rv", name: "Revelation", testament: "New" as const },
 ];
 
-export const FULL_BIBLE: BibleBook[] = (BIBLE_RAW_DATA as any).map(
-  (book: any, bookIdx: number) => {
+let cachedBible: BibleBook[] | null = null;
+
+export function getFullBible(): BibleBook[] {
+  if (cachedBible) return cachedBible;
+  const BIBLE_RAW_DATA = require("../db/bible-kjv.json");
+  cachedBible = (BIBLE_RAW_DATA as any).map((book: any, bookIdx: number) => {
     const meta = BIBLE_BOOKS[bookIdx] || {
       abbrev: book.abbrev,
       name: book.abbrev,
@@ -106,10 +110,12 @@ export const FULL_BIBLE: BibleBook[] = (BIBLE_RAW_DATA as any).map(
         })),
       })),
     };
-  },
-);
+  });
+  return cachedBible!;
+}
 
 export default function BibleScreen() {
+  const FULL_BIBLE = getFullBible();
   const insets = useSafeAreaInsets();
   const { isDark, fontSize } = useApp();
 

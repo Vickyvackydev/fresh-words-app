@@ -105,7 +105,9 @@ export default function SettingsScreen() {
 
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: firstDev ? (firstDev.title || "Test Daily Devotional 🕊️") : "Test Daily Devotional 🕊️",
+          title: firstDev
+            ? firstDev.title || "Test Daily Devotional 🕊️"
+            : "Test Daily Devotional 🕊️",
           body: firstDev
             ? "Today's devotional is ready — Tap to read now"
             : "This is your test notification! Tap to open.",
@@ -217,7 +219,7 @@ export default function SettingsScreen() {
                 Dark Theme
               </Text>
               <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                ChatGPT charcoal dark theme
+                Activate dark mode
               </Text>
             </View>
             <Switch
@@ -606,7 +608,11 @@ export default function SettingsScreen() {
       </Modal>
 
       {/* D. Custom Time Picker Modal */}
-      <Modal visible={timePickerVisible} transparent={true} animationType="slide">
+      <Modal
+        visible={timePickerVisible}
+        transparent={true}
+        animationType="slide"
+      >
         <View className="flex-1 bg-black/40 justify-end">
           <View
             className="bg-[#FDFBF7] dark:bg-[#1E1E1E] rounded-t-3xl border-t border-[#E0E1E6] dark:border-[#2E3135] p-6 space-y-4"
@@ -632,7 +638,10 @@ export default function SettingsScreen() {
                 <Text className="text-[10px] font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-2 text-center">
                   Hour
                 </Text>
-                <ScrollView showsVerticalScrollIndicator={false} className="bg-[#FAF8F5] dark:bg-[#1C1C1E] rounded-2xl border border-[#E0E1E6] dark:border-[#2E3135] p-2">
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  className="bg-[#FAF8F5] dark:bg-[#1C1C1E] rounded-2xl border border-[#E0E1E6] dark:border-[#2E3135] p-2"
+                >
                   {Array.from({ length: 24 }, (_, i) => {
                     const hStr = i.toString().padStart(2, "0");
                     const isSelected = tempHour === hStr;
@@ -641,10 +650,14 @@ export default function SettingsScreen() {
                         key={hStr}
                         onPress={() => setTempHour(hStr)}
                         className={`py-2.5 rounded-xl items-center mb-1.5 active:scale-95 ${
-                          isSelected ? "bg-[#1E40AF] dark:bg-[#2563EB]" : "bg-transparent"
+                          isSelected
+                            ? "bg-[#1E40AF] dark:bg-[#2563EB]"
+                            : "bg-transparent"
                         }`}
                       >
-                        <Text className={`text-sm font-semibold ${isSelected ? "text-white" : "text-[#1C1917] dark:text-[#F3F4F6]"}`}>
+                        <Text
+                          className={`text-sm font-semibold ${isSelected ? "text-white" : "text-[#1C1917] dark:text-[#F3F4F6]"}`}
+                        >
                           {hStr}
                         </Text>
                       </Pressable>
@@ -658,7 +671,10 @@ export default function SettingsScreen() {
                 <Text className="text-[10px] font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-2 text-center">
                   Minute
                 </Text>
-                <ScrollView showsVerticalScrollIndicator={false} className="bg-[#FAF8F5] dark:bg-[#1C1C1E] rounded-2xl border border-[#E0E1E6] dark:border-[#2E3135] p-2">
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  className="bg-[#FAF8F5] dark:bg-[#1C1C1E] rounded-2xl border border-[#E0E1E6] dark:border-[#2E3135] p-2"
+                >
                   {Array.from({ length: 12 }, (_, i) => {
                     const mVal = (i * 5).toString().padStart(2, "0");
                     const isSelected = tempMinute === mVal;
@@ -667,10 +683,14 @@ export default function SettingsScreen() {
                         key={mVal}
                         onPress={() => setTempMinute(mVal)}
                         className={`py-2.5 rounded-xl items-center mb-1.5 active:scale-95 ${
-                          isSelected ? "bg-[#1E40AF] dark:bg-[#2563EB]" : "bg-transparent"
+                          isSelected
+                            ? "bg-[#1E40AF] dark:bg-[#2563EB]"
+                            : "bg-transparent"
                         }`}
                       >
-                        <Text className={`text-sm font-semibold ${isSelected ? "text-white" : "text-[#1C1917] dark:text-[#F3F4F6]"}`}>
+                        <Text
+                          className={`text-sm font-semibold ${isSelected ? "text-white" : "text-[#1C1917] dark:text-[#F3F4F6]"}`}
+                        >
                           {mVal}
                         </Text>
                       </Pressable>
