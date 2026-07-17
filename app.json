@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "fresh-words-app",
+    "name": "Fresh Devotionals",
     "slug": "fresh-words-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -40,6 +40,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bf1428fa-e162-4e76-89a8-7530c450a30b"
+      }
     }
   }
 }
