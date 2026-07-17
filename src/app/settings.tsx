@@ -87,48 +87,6 @@ export default function SettingsScreen() {
     }
   };
 
-  const triggerTestNotification = async () => {
-    if (!Notifications) {
-      alert(
-        "Notifications are disabled in Expo Go Android. To test notifications, please run on an emulator or a development build, or use an iOS device.",
-      );
-      return;
-    }
-    try {
-      const activeCategory = appSettings?.daily_deliverance_enabled
-        ? "Daily Deliverance"
-        : appSettings?.yearly_devotional_enabled
-          ? "Yearly Devotional"
-          : "Daily Deliverance";
-      const catDevs = offlineDevotionals[activeCategory] || [];
-      const firstDev = catDevs[0];
-
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: firstDev
-            ? firstDev.title || "Test Daily Devotional 🕊️"
-            : "Test Daily Devotional 🕊️",
-          body: firstDev
-            ? "Today's devotional is ready — Tap to read now"
-            : "This is your test notification! Tap to open.",
-          data: {
-            category: firstDev ? firstDev.category : "Daily Deliverance",
-            devotionalId: firstDev ? firstDev.id : "",
-          },
-        },
-        trigger: {
-          type: "timeInterval",
-          seconds: 5,
-        } as any,
-      });
-      alert(
-        "Test notification scheduled! Put the app in background (go to home screen) immediately.",
-      );
-    } catch (e) {
-      alert("Failed to schedule test notification: " + (e as any).message);
-    }
-  };
-
   const submitFeedbackMutation = useSubmitFeedback();
 
   const handleFeedbackSubmit = () => {
@@ -344,28 +302,6 @@ export default function SettingsScreen() {
             </Pressable>
           </View>
 
-          {/* Divider */}
-          <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135]" />
-
-          {/* Notification testing */}
-          <View className="flex-row justify-between items-center">
-            <View className="flex-1 mr-4">
-              <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                Notification Testing
-              </Text>
-              <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mt-0.5">
-                Trigger a test daily reminder in 5 seconds
-              </Text>
-            </View>
-            <Pressable
-              onPress={triggerTestNotification}
-              className="py-1.5 px-3 rounded-lg bg-[#E0E1E6] dark:bg-[#2E3135] active:opacity-75"
-            >
-              <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA]">
-                Test (5s)
-              </Text>
-            </Pressable>
-          </View>
         </View>
 
         {/* Section 4: Support & Actions */}
@@ -594,14 +530,6 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
               )}
-              <View className="flex-row justify-between">
-                <Text className="text-xs font-semibold text-[#60646C] dark:text-[#B0B4BA]">
-                  Developer
-                </Text>
-                <Text className="text-xs font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                  Antigravity Labs
-                </Text>
-              </View>
             </View>
           </View>
         </View>

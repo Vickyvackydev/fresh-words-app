@@ -32,7 +32,6 @@ const safeStorage = {
 
 import AppTabs from "@/components/app-tabs";
 import Onboarding from "@/components/onboarding";
-import PermissionPrompt from "@/components/permission-prompt";
 import {
   DarkTheme as NavigationDarkTheme,
   DefaultTheme as NavigationDefaultTheme,
@@ -546,12 +545,6 @@ export default function RootLayout() {
           ) : !hasLaunched ? (
             <AppProvider value={contextValue}>
               <Onboarding onFinish={() => handleSetHasLaunched(true)} />
-            </AppProvider>
-          ) : !permissionPromptDone ? (
-            <AppProvider value={contextValue}>
-              <PermissionPrompt
-                onFinish={() => handleSetPermissionPromptDone(true)}
-              />
             </AppProvider>
           ) : (
             <AppProvider value={contextValue}>
