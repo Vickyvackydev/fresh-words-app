@@ -5,6 +5,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -47,6 +48,8 @@ export default function SettingsScreen() {
     offlineDevotionals,
     userName,
     setUserName,
+    devotionalPrefs,
+    setDevotionalPref,
   } = useApp();
 
   // Settings modals
@@ -161,7 +164,8 @@ export default function SettingsScreen() {
               onChangeText={setUserName}
               placeholder="e.g. Victor"
               placeholderTextColor={isDark ? "#888" : "#A3A3A3"}
-              className="w-32 h-9 px-3 bg-[#FAF8F5] dark:bg-[#252527] border border-[#E0E1E6] dark:border-[#3E4249] rounded-xl text-sm text-[#1C1917] dark:text-[#F3F4F6] text-right font-semibold"
+              style={{ paddingVertical: 0, textAlignVertical: "center", includeFontPadding: false }}
+              className="w-32 h-10 px-3 bg-[#FAF8F5] dark:bg-[#252527] border border-[#E0E1E6] dark:border-[#3E4249] rounded-xl text-sm text-[#1C1917] dark:text-[#F3F4F6] text-right font-semibold"
               maxLength={15}
               autoCorrect={false}
             />
@@ -266,6 +270,45 @@ export default function SettingsScreen() {
               </Pressable>
             </>
           )}
+        </View>
+
+        {/* Section 2b: Devotionals */}
+        <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
+          Devotionals
+        </Text>
+        <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6">
+          {[
+            { id: "daily_deliverance", category: "Daily Deliverance", desc: "Receive daily deliverance series" },
+            { id: "holiness", category: "Holiness", desc: "Receive daily holiness devotionals" },
+            { id: "prayer", category: "Prayer", desc: "Receive daily prayer & intercession" },
+            { id: "yearly_devotional", category: "Yearly Devotional", desc: "Receive full annual devotional package" },
+          ].map((item, index) => {
+            const adminEnabled = appSettings ? appSettings[`${item.id}_enabled`] !== false : true;
+            if (!adminEnabled) return null;
+            const isUserEnabled = devotionalPrefs ? devotionalPrefs[item.category] !== false : true;
+
+            return (
+              <View key={item.id}>
+                {index > 0 && <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135] mb-4" />}
+                <View className="flex-row justify-between items-center">
+                  <View className="flex-1 mr-4">
+                    <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                      {item.category}
+                    </Text>
+                    <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
+                      {item.desc}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isUserEnabled}
+                    onValueChange={(val) => setDevotionalPref(item.category, val)}
+                    trackColor={{ false: "#E0E1E6", true: "#1E40AF" }}
+                    thumbColor={Platform.OS === "android" ? "#FAF8F5" : undefined}
+                  />
+                </View>
+              </View>
+            );
+          })}
         </View>
 
         {/* Section 3: Offline Storage */}
@@ -530,6 +573,37 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
               )}
+            </View>
+
+            <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135] my-2" />
+
+            {/* Terms of Service & Privacy Policy Browser Links */}
+            <View className="gap-y-2">
+              <Pressable
+                onPress={() => {
+                  const url = appSettings?.terms_of_service_url || "https://freshdevotionals.com/terms";
+                  Linking.openURL(url).catch((err) => console.warn("Cannot open terms URL:", err));
+                }}
+                className="flex-row justify-between items-center py-2 active:opacity-60"
+              >
+                <Text className="text-xs font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
+                  Terms of Service
+                </Text>
+                <Ionicons name="open-outline" size={14} color={isDark ? "#60A5FA" : "#1E40AF"} />
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  const url = appSettings?.privacy_policy_url || "https://freshdevotionals.com/privacy";
+                  Linking.openURL(url).catch((err) => console.warn("Cannot open privacy URL:", err));
+                }}
+                className="flex-row justify-between items-center py-2 border-t border-[#E0E1E6]/60 dark:border-[#2E3135]/60 active:opacity-60"
+              >
+                <Text className="text-xs font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
+                  Privacy Policy
+                </Text>
+                <Ionicons name="open-outline" size={14} color={isDark ? "#60A5FA" : "#1E40AF"} />
+              </Pressable>
             </View>
           </View>
         </View>

@@ -111,10 +111,24 @@ export default function RootLayout() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [tappedDevotional, setTappedDevotional] = useState<any | null>(null);
   const [userName, setUserNameState] = useState("");
+  const [devotionalPrefs, setDevotionalPrefs] = useState<Record<string, boolean>>({
+    "Daily Deliverance": true,
+    "Holiness": true,
+    "Prayer": true,
+    "Yearly Devotional": true,
+  });
 
   const handleSetUserName = async (name: string) => {
     setUserNameState(name);
     await safeStorage.setItem("userName", name);
+  };
+
+  const handleSetDevotionalPref = async (category: string, enabled: boolean) => {
+    setDevotionalPrefs((prev) => {
+      const updated = { ...prev, [category]: enabled };
+      safeStorage.setItem("devotionalPrefs", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   // Schedule daily reminders offline-first when settings or local cache updates
@@ -199,6 +213,7 @@ export default function RootLayout() {
           "appSettings",
           "offlineDevotionals",
           "userName",
+          "devotionalPrefs",
         ];
         const stores = await safeStorage.multiGet(keys);
         const storeMap: Record<string, string | null> = {};
@@ -209,6 +224,8 @@ export default function RootLayout() {
         if (storeMap.hasLaunched === "true") setHasLaunched(true);
         if (storeMap.permissionPromptDone === "true")
           setPermissionPromptDone(true);
+        if (storeMap.devotionalPrefs)
+          setDevotionalPrefs(JSON.parse(storeMap.devotionalPrefs));
         if (storeMap.bookmarks) setBookmarks(JSON.parse(storeMap.bookmarks));
         if (storeMap.readingProgress)
           setReadingProgress(JSON.parse(storeMap.readingProgress));
@@ -532,6 +549,8 @@ export default function RootLayout() {
     setUserName: handleSetUserName,
     tappedDevotional,
     setTappedDevotional,
+    devotionalPrefs,
+    setDevotionalPref: handleSetDevotionalPref,
   };
 
   return (

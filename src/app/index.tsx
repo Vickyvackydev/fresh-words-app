@@ -90,7 +90,9 @@ export default function HomeScreen() {
         reflection: cachedDevotional.reflection || "",
         actionPoints:
           typeof cachedDevotional.action_points === "string"
-            ? JSON.parse(cachedDevotional.action_points || "[]")
+            ? (cachedDevotional.action_points.trim().startsWith("[")
+                ? JSON.parse(cachedDevotional.action_points || "[]")
+                : [cachedDevotional.action_points])
             : Array.isArray(cachedDevotional.actionPoints)
               ? cachedDevotional.actionPoints
               : [],
@@ -125,7 +127,9 @@ export default function HomeScreen() {
         reflection: tappedDevotional.reflection || "",
         actionPoints:
           typeof tappedDevotional.action_points === "string"
-            ? JSON.parse(tappedDevotional.action_points || "[]")
+            ? (tappedDevotional.action_points.trim().startsWith("[")
+                ? JSON.parse(tappedDevotional.action_points || "[]")
+                : [tappedDevotional.action_points])
             : Array.isArray(tappedDevotional.actionPoints)
               ? tappedDevotional.actionPoints
               : [],
@@ -182,7 +186,9 @@ export default function HomeScreen() {
       reflection: d.reflection || "",
       actionPoints:
         typeof d.action_points === "string"
-          ? JSON.parse(d.action_points || "[]")
+          ? (d.action_points.trim().startsWith("[")
+              ? JSON.parse(d.action_points || "[]")
+              : [d.action_points])
           : [],
     }));
 

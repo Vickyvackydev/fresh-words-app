@@ -28,6 +28,8 @@ export interface AppContextType {
   setUserName: (name: string) => void;
   tappedDevotional: any | null;
   setTappedDevotional: (devotional: any | null) => void;
+  devotionalPrefs: Record<string, boolean>;
+  setDevotionalPref: (category: string, enabled: boolean) => void;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);
