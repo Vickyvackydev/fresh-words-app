@@ -26,7 +26,8 @@ if (Notifications) {
 export async function scheduleDailyNotifications(
   appSettings: any,
   offlineDevotionals: Record<string, any[]>,
-  customTime?: string
+  customTime?: string,
+  activeCategory?: string
 ) {
   if (!Notifications) {
     console.warn("Notifications is disabled in Expo Go Android. Skipping scheduling.");
@@ -67,57 +68,58 @@ export async function scheduleDailyNotifications(
     },
   ];
 
+  // Strictly target ONLY the user's active/default devotional category
+  const selectedCatName = activeCategory || "Daily Deliverance";
+  const targetCategory = categories.find((c) => c.name === selectedCatName) || categories[0];
+
+  if (!targetCategory || !targetCategory.enabled) return;
+
+  const list = offlineDevotionals[targetCategory.name] || [];
+  if (list.length === 0) return;
+
+  const { hour, minute } = parseTimeStr(targetCategory.time);
   const now = new Date();
 
-  for (const cat of categories) {
-    if (!cat.enabled) continue;
+  // Schedule next 7 days of daily devotional notifications for the user's default category ONLY
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    const scheduledDate = new Date();
+    scheduledDate.setDate(now.getDate() + dayOffset);
+    scheduledDate.setHours(hour);
+    scheduledDate.setMinutes(minute);
+    scheduledDate.setSeconds(0);
+    scheduledDate.setMilliseconds(0);
 
-    const list = offlineDevotionals[cat.name] || [];
-    if (list.length === 0) continue;
-
-    const { hour, minute } = parseTimeStr(cat.time);
-
-    // Schedule next 7 days of daily devotional notifications
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-      const scheduledDate = new Date();
-      scheduledDate.setDate(now.getDate() + dayOffset);
-      scheduledDate.setHours(hour);
-      scheduledDate.setMinutes(minute);
-      scheduledDate.setSeconds(0);
-      scheduledDate.setMilliseconds(0);
-
-      // If in the past for today, push to tomorrow
-      if (scheduledDate.getTime() <= now.getTime()) {
-        continue;
-      }
-
-      const targetDayOfYear = getDayOfYear(scheduledDate);
-      const devIndex = (targetDayOfYear - 1) % list.length;
-      const devotional = list[devIndex];
-
-      if (!devotional) continue;
-
-      const diffMs = scheduledDate.getTime() - now.getTime();
-      const seconds = Math.floor(diffMs / 1000);
-      if (seconds <= 0) continue;
-
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: devotional.title || `Daily ${cat.name}`,
-          body: `Today's devotional is ready — Tap to read now`,
-          data: {
-            category: cat.name,
-            devotionalId: devotional.id,
-            day: devotional.default_day || (devIndex + 1),
-            dayOfYear: targetDayOfYear,
-          },
-        },
-        trigger: {
-          type: "timeInterval",
-          seconds,
-        } as any,
-      });
+    // If in the past for today, push to tomorrow
+    if (scheduledDate.getTime() <= now.getTime()) {
+      continue;
     }
+
+    const targetDayOfYear = getDayOfYear(scheduledDate);
+    const devIndex = (targetDayOfYear - 1) % list.length;
+    const devotional = list[devIndex];
+
+    if (!devotional) continue;
+
+    const diffMs = scheduledDate.getTime() - now.getTime();
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds <= 0) continue;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: devotional.title || `Daily ${targetCategory.name}`,
+        body: `Today's devotional is ready — Tap to read now`,
+        data: {
+          category: targetCategory.name,
+          devotionalId: devotional.id,
+          day: devotional.default_day || (devIndex + 1),
+          dayOfYear: targetDayOfYear,
+        },
+      },
+      trigger: {
+        type: "timeInterval",
+        seconds,
+      } as any,
+    });
   }
 }
 

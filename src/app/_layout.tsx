@@ -138,7 +138,7 @@ export default function RootLayout() {
     });
   };
 
-  // Schedule daily reminders offline-first when settings or local cache updates
+  // Schedule daily reminders offline-first for the user's active default devotional category ONLY
   useEffect(() => {
     if (
       appSettings &&
@@ -149,11 +149,12 @@ export default function RootLayout() {
         appSettings,
         offlineDevotionals,
         notificationTime,
+        activeDevotionalCategory,
       ).catch((err) => {
         console.warn("Failed to schedule notifications:", err);
       });
     }
-  }, [appSettings, offlineDevotionals, notificationsEnabled, notificationTime]);
+  }, [appSettings, offlineDevotionals, notificationsEnabled, notificationTime, activeDevotionalCategory]);
 
   // Listen for clicked local notifications to route the user
   useEffect(() => {
