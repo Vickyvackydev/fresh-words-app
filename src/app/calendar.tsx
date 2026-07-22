@@ -11,7 +11,7 @@ import { useApp } from "@/context/AppContext";
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
-  const { bookmarks, toggleBookmark, isDark, appSettings, offlineDevotionals, readingProgress } = useApp();
+  const { bookmarks, toggleBookmark, isDark, appSettings, offlineDevotionals, readingProgress, activeDevotionalCategory } = useApp();
 
   // Reader state
   const [selectedDevotional, setSelectedDevotional] =
@@ -19,6 +19,12 @@ export default function CalendarScreen() {
   const [readerVisible, setReaderVisible] = useState(false);
 
   const getActiveCategory = () => {
+    if (activeDevotionalCategory) {
+      const metaId = activeDevotionalCategory.toLowerCase().replace(/ /g, "_");
+      if (!appSettings || appSettings[`${metaId}_enabled`] !== false) {
+        return activeDevotionalCategory;
+      }
+    }
     if (!appSettings) return "Daily Deliverance";
     if (appSettings.daily_deliverance_enabled) return "Daily Deliverance";
     if (appSettings.yearly_devotional_enabled) return "Yearly Devotional";
@@ -100,7 +106,9 @@ export default function CalendarScreen() {
         prayer: cachedDevotional.prayer || "",
         reflection: cachedDevotional.reflection || "",
         actionPoints: typeof cachedDevotional.action_points === "string"
-          ? JSON.parse(cachedDevotional.action_points || "[]")
+          ? (cachedDevotional.action_points.trim().startsWith("[")
+              ? JSON.parse(cachedDevotional.action_points || "[]")
+              : [cachedDevotional.action_points])
           : Array.isArray(cachedDevotional.actionPoints)
           ? cachedDevotional.actionPoints
           : [],

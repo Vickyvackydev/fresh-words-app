@@ -40,6 +40,19 @@ export default function AppTabs() {
         }}
       />
       <Tabs.Screen
+        name="devotionals"
+        options={{
+          title: "Devotionals",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? "journal" : "journal-outline"}
+              size={22}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="bible"
         options={{
           title: "Bible",
@@ -81,14 +94,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? "settings" : "settings-outline"}
-              size={22}
-              color={color}
-            />
-          ),
+          href: null,
         }}
       />
     </Tabs>

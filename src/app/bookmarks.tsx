@@ -65,7 +65,9 @@ export default function BookmarksScreen() {
       reflection: d.reflection || "",
       actionPoints:
         typeof d.action_points === "string"
-          ? JSON.parse(d.action_points || "[]")
+          ? (d.action_points.trim().startsWith("[")
+              ? JSON.parse(d.action_points || "[]")
+              : [d.action_points])
           : [],
     }));
 

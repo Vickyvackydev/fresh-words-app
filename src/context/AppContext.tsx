@@ -30,6 +30,8 @@ export interface AppContextType {
   setTappedDevotional: (devotional: any | null) => void;
   devotionalPrefs: Record<string, boolean>;
   setDevotionalPref: (category: string, enabled: boolean) => void;
+  activeDevotionalCategory: string;
+  setActiveDevotionalCategory: (category: string) => void;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

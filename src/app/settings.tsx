@@ -50,6 +50,8 @@ export default function SettingsScreen() {
     setUserName,
     devotionalPrefs,
     setDevotionalPref,
+    activeDevotionalCategory,
+    setActiveDevotionalCategory,
   } = useApp();
 
   // Settings modals
@@ -274,7 +276,7 @@ export default function SettingsScreen() {
 
         {/* Section 2b: Devotionals */}
         <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
-          Devotionals
+          Primary Devotional (Reader & Reminders)
         </Text>
         <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6">
           {[
@@ -285,27 +287,42 @@ export default function SettingsScreen() {
           ].map((item, index) => {
             const adminEnabled = appSettings ? appSettings[`${item.id}_enabled`] !== false : true;
             if (!adminEnabled) return null;
-            const isUserEnabled = devotionalPrefs ? devotionalPrefs[item.category] !== false : true;
+            const isSelected = activeDevotionalCategory === item.category;
 
             return (
               <View key={item.id}>
                 {index > 0 && <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135] mb-4" />}
-                <View className="flex-row justify-between items-center">
+                <Pressable
+                  onPress={() => setActiveDevotionalCategory(item.category)}
+                  className="flex-row justify-between items-center active:opacity-75"
+                >
                   <View className="flex-1 mr-4">
-                    <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                      {item.category}
-                    </Text>
+                    <View className="flex-row items-center gap-x-2">
+                      <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                        {item.category}
+                      </Text>
+                      {isSelected && (
+                        <Text className="text-[10px] font-bold text-[#1E40AF] dark:text-[#60A5FA] bg-[#EEF2FF] dark:bg-[#1A1F36] px-2 py-0.5 rounded-full">
+                          Default
+                        </Text>
+                      )}
+                    </View>
                     <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
                       {item.desc}
                     </Text>
                   </View>
-                  <Switch
-                    value={isUserEnabled}
-                    onValueChange={(val) => setDevotionalPref(item.category, val)}
-                    trackColor={{ false: "#E0E1E6", true: "#1E40AF" }}
-                    thumbColor={Platform.OS === "android" ? "#FAF8F5" : undefined}
-                  />
-                </View>
+                  <View
+                    className={`w-6 h-6 rounded-full border items-center justify-center ${
+                      isSelected
+                        ? "bg-[#1E40AF] border-[#1E40AF]"
+                        : "border-[#E0E1E6] dark:border-[#3E4249]"
+                    }`}
+                  >
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                    )}
+                  </View>
+                </Pressable>
               </View>
             );
           })}

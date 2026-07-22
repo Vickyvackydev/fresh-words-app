@@ -111,6 +111,8 @@ export default function RootLayout() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [tappedDevotional, setTappedDevotional] = useState<any | null>(null);
   const [userName, setUserNameState] = useState("");
+  const [activeDevotionalCategory, setActiveDevotionalCategoryState] =
+    useState("Daily Deliverance");
   const [devotionalPrefs, setDevotionalPrefs] = useState<Record<string, boolean>>({
     "Daily Deliverance": true,
     "Holiness": true,
@@ -121,6 +123,11 @@ export default function RootLayout() {
   const handleSetUserName = async (name: string) => {
     setUserNameState(name);
     await safeStorage.setItem("userName", name);
+  };
+
+  const handleSetActiveDevotionalCategory = async (category: string) => {
+    setActiveDevotionalCategoryState(category);
+    await safeStorage.setItem("defaultDevotionalCategory", category);
   };
 
   const handleSetDevotionalPref = async (category: string, enabled: boolean) => {
@@ -214,6 +221,7 @@ export default function RootLayout() {
           "offlineDevotionals",
           "userName",
           "devotionalPrefs",
+          "defaultDevotionalCategory",
         ];
         const stores = await safeStorage.multiGet(keys);
         const storeMap: Record<string, string | null> = {};
@@ -226,6 +234,8 @@ export default function RootLayout() {
           setPermissionPromptDone(true);
         if (storeMap.devotionalPrefs)
           setDevotionalPrefs(JSON.parse(storeMap.devotionalPrefs));
+        if (storeMap.defaultDevotionalCategory)
+          setActiveDevotionalCategoryState(storeMap.defaultDevotionalCategory);
         if (storeMap.bookmarks) setBookmarks(JSON.parse(storeMap.bookmarks));
         if (storeMap.readingProgress)
           setReadingProgress(JSON.parse(storeMap.readingProgress));
@@ -298,10 +308,24 @@ export default function RootLayout() {
           }
         }
 
+        // Helper for fast-failing network fetches in offline mode
+        const fetchWithTimeout = async (url: string, timeoutMs = 3000) => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timer);
+            return res;
+          } catch (err) {
+            clearTimeout(timer);
+            throw err;
+          }
+        };
+
         // Fetch settings from server
         try {
           const baseUrl = getBaseUrl();
-          const response = await fetch(`${baseUrl}/settings`);
+          const response = await fetchWithTimeout(`${baseUrl}/settings`);
           const json = await response.json();
           if (json.success && json.data) {
             setAppSettings(json.data);
@@ -312,11 +336,8 @@ export default function RootLayout() {
               setNotificationTime(getCategoryTime(json.data));
             }
           }
-        } catch (fetchErr) {
-          console.warn(
-            "Failed to fetch settings from server, using cached settings:",
-            fetchErr,
-          );
+        } catch {
+          console.log("[Offline Mode] Using cached app settings.");
         }
 
         // Auto-sync devotionals on launch
@@ -331,15 +352,16 @@ export default function RootLayout() {
           const updatedCache: Record<string, any[]> = {};
           for (const cat of categories) {
             try {
-              const res = await fetch(
+              const res = await fetchWithTimeout(
                 `${baseUrl}/packages/active?category=${encodeURIComponent(cat)}`,
+                3000,
               );
               const json = await res.json();
               if (json.success && Array.isArray(json.data)) {
                 updatedCache[cat] = json.data;
               }
-            } catch (catErr) {
-              // silently ignore failures on single category
+            } catch {
+              // silently ignore failures on single category in offline mode
             }
           }
           if (Object.keys(updatedCache).length > 0) {
@@ -349,14 +371,14 @@ export default function RootLayout() {
               return merged;
             });
           }
-        } catch (syncErr) {
-          console.warn("Failed to auto-sync devotionals on launch:", syncErr);
+        } catch {
+          console.log("[Offline Mode] Using cached offline devotionals.");
         }
 
         // Sync bookmarks from backend
         try {
           const baseUrl = getBaseUrl();
-          const response = await fetch(
+          const response = await fetchWithTimeout(
             `${baseUrl}/bookmarks?device_id=${devId}`,
           );
           const json = await response.json();
@@ -368,11 +390,8 @@ export default function RootLayout() {
               JSON.stringify(serverBookmarkIds),
             );
           }
-        } catch (syncErr) {
-          console.warn(
-            "Failed to sync bookmarks from server, using offline bookmarks:",
-            syncErr,
-          );
+        } catch {
+          console.log("[Offline Mode] Using local bookmarks.");
         }
       } catch (e) {
         console.error("Storage initialization error:", e);
@@ -551,6 +570,8 @@ export default function RootLayout() {
     setTappedDevotional,
     devotionalPrefs,
     setDevotionalPref: handleSetDevotionalPref,
+    activeDevotionalCategory,
+    setActiveDevotionalCategory: handleSetActiveDevotionalCategory,
   };
 
   return (

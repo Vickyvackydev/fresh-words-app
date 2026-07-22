@@ -26,9 +26,16 @@ export default function HomeScreen() {
     tappedDevotional,
     setTappedDevotional,
     userName,
+    activeDevotionalCategory,
   } = useApp();
 
   const getActiveCategory = () => {
+    if (activeDevotionalCategory) {
+      const metaId = activeDevotionalCategory.toLowerCase().replace(/ /g, "_");
+      if (!appSettings || appSettings[`${metaId}_enabled`] !== false) {
+        return activeDevotionalCategory;
+      }
+    }
     if (!appSettings) return "Daily Deliverance";
     if (appSettings.daily_deliverance_enabled) return "Daily Deliverance";
     if (appSettings.yearly_devotional_enabled) return "Yearly Devotional";
@@ -225,10 +232,9 @@ export default function HomeScreen() {
             className="w-11 h-11 rounded-full bg-[#F3EFE6] dark:bg-[#1E1E1E] items-center justify-center active:scale-95"
           >
             <Ionicons
-              name="person-outline"
+              name="settings-outline"
               size={20}
               color={isDark ? "#F3F4F6" : "#1C1917"}
-              // className="text-[#1C1917] dark:text-[#F3F4F6]"
             />
           </Pressable>
         </View>
@@ -310,21 +316,11 @@ export default function HomeScreen() {
                 {todayDevotion.title.toLowerCase()}
               </Text>
               <Text
-                className="text-sm leading-5 text-[#60646C] dark:text-[#B0B4BA] mb-5"
+                className="text-sm leading-5 text-[#60646C] dark:text-[#B0B4BA] mb-6"
                 numberOfLines={2}
               >
                 {todayDevotion.body[0]}
               </Text>
-
-              {/* Progress bar */}
-              <View className="h-1.5 w-full bg-[#E0E1E6] dark:bg-[#2E3135] rounded-full mb-6 overflow-hidden">
-                <View
-                  className="h-full bg-[#1E40AF] dark:bg-[#60A5FA]"
-                  style={{
-                    width: `${(readingProgress[todayDevotion.id] || 0) * 100}%`,
-                  }}
-                />
-              </View>
 
               <View className="flex-row justify-between items-center">
                 <Pressable
@@ -384,7 +380,7 @@ export default function HomeScreen() {
             { label: "Bible", icon: "book", route: "/bible" },
             { label: "Bookmarks", icon: "bookmark", route: "/bookmarks" },
             { label: "Calendar", icon: "calendar", route: "/calendar" },
-            { label: "Settings", icon: "settings", route: "/settings" },
+            { label: "Devotionals", icon: "journal", route: "/devotionals" },
           ].map((act, index) => (
             <Pressable
               key={index}
