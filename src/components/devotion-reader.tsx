@@ -201,7 +201,7 @@ export default function DevotionReader({
               <Ionicons
                 name="text-outline"
                 size={22}
-                className="text-[#1C1917] dark:text-[#F3F4F6]"
+                color={isDark ? "#F3F4F6" : "#1C1917"}
               />
             </Pressable>
 
@@ -217,9 +217,8 @@ export default function DevotionReader({
                 <Ionicons
                   name={isBookmarked ? "bookmark" : "bookmark-outline"}
                   size={22}
-                  color={isBookmarked ? "#1E40AF" : undefined}
-                  className={
-                    isBookmarked ? "" : "text-[#1C1917] dark:text-[#F3F4F6]"
+                  color={
+                    isBookmarked ? "#1E40AF" : isDark ? "#F3F4F6" : "#1C1917"
                   }
                 />
               </Pressable>
@@ -233,7 +232,7 @@ export default function DevotionReader({
               <Ionicons
                 name="share-outline"
                 size={22}
-                className="text-[#1C1917] dark:text-[#F3F4F6]"
+                color={isDark ? "#F3F4F6" : "#1C1917"}
               />
             </Pressable>
           </View>
