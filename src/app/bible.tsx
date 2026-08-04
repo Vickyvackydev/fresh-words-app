@@ -743,8 +743,14 @@ export default function BibleScreen() {
                     <Pressable
                       key={v.verse}
                       onLayout={(event) => {
-                        verseLayouts.current[v.verse] =
-                          event.nativeEvent.layout.y;
+                        const y = event.nativeEvent.layout.y;
+                        verseLayouts.current[v.verse] = y;
+                        if (selectedVerseNum === v.verse && readerScrollViewRef.current) {
+                          readerScrollViewRef.current.scrollTo({
+                            y: Math.max(0, y - 40),
+                            animated: true,
+                          });
+                        }
                       }}
                       onPress={() => handleVersePress(v)}
                       className="py-2 px-2.5 rounded-xl active:bg-[#F3EFE6] dark:active:bg-[#1E1E1E]"
