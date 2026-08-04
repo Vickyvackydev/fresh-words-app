@@ -1,4 +1,5 @@
 import { useApp } from "@/context/AppContext";
+import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -119,6 +120,12 @@ export default function BibleScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, fontSize } = useApp();
 
+  const { book, chapter, verse } = useLocalSearchParams<{
+    book?: string;
+    chapter?: string;
+    verse?: string;
+  }>();
+
   // Mode state: 'books' | 'search'
   const [activeTab, setActiveTab] = useState<"books" | "search">("books");
 
@@ -129,6 +136,39 @@ export default function BibleScreen() {
   const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [selectedVerseNum, setSelectedVerseNum] = useState<number | null>(null);
+
+  // Deep linking parameter handler
+  useEffect(() => {
+    if (book) {
+      const cleanBookParam = book.trim().toLowerCase();
+      const matchedBook = FULL_BIBLE.find(
+        (b) =>
+          b.name.toLowerCase() === cleanBookParam ||
+          b.name.toLowerCase().replace(/\s+/g, "") === cleanBookParam.replace(/\s+/g, "") ||
+          b.name.toLowerCase().includes(cleanBookParam) ||
+          cleanBookParam.includes(b.name.toLowerCase())
+      );
+
+      if (matchedBook) {
+        setSelectedBook(matchedBook);
+        const parsedChapter = chapter ? parseInt(chapter, 10) : 1;
+        const validChapter =
+          !isNaN(parsedChapter) && parsedChapter > 0 && parsedChapter <= matchedBook.chapters.length
+            ? parsedChapter
+            : 1;
+        setSelectedChapter(validChapter);
+
+        if (verse) {
+          const parsedVerse = parseInt(verse, 10);
+          if (!isNaN(parsedVerse)) {
+            setSelectedVerseNum(parsedVerse);
+          }
+        }
+        setViewMode("reader");
+        setActiveTab("books");
+      }
+    }
+  }, [book, chapter, verse]);
 
   // Search states
   const [bookSearchQuery, setBookSearchQuery] = useState("");

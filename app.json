@@ -8,7 +8,11 @@
     "scheme": "freshwordsapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.freshdevotionals.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +22,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.freshwordsapp"
+      "package": "com.freshdevotionals.app"
     },
     "web": {
       "output": "static",
@@ -31,7 +35,7 @@
         {
           "backgroundColor": "#FDFBF7",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 240,
+          "imageWidth": 150,
           "resizeMode": "contain",
           "dark": {
             "backgroundColor": "#121212",

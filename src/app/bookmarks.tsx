@@ -35,9 +35,11 @@ export default function BookmarksScreen() {
 
   const handleShare = async (dev: Devotional) => {
     try {
+      const shareUrl = `freshwordsapp://devotional/${dev.id}`;
       await Share.share({
-        message: `Fresh Words Devotional: "${dev.title}" (${dev.scriptureRef})\n\nRead more in the Fresh Words app!`,
+        message: `📖 "${dev.title}" (${dev.scriptureRef})\n\nRead more in Fresh Devotionals app: ${shareUrl}`,
         title: dev.title,
+        url: shareUrl,
       });
     } catch (e) {
       console.log(e);
@@ -65,9 +67,9 @@ export default function BookmarksScreen() {
       reflection: d.reflection || "",
       actionPoints:
         typeof d.action_points === "string"
-          ? (d.action_points.trim().startsWith("[")
-              ? JSON.parse(d.action_points || "[]")
-              : [d.action_points])
+          ? d.action_points.trim().startsWith("[")
+            ? JSON.parse(d.action_points || "[]")
+            : [d.action_points]
           : [],
     }));
 

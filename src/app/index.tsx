@@ -9,6 +9,23 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Devotional, MOCK_QUOTES } from "../db/mockDb";
+import { getQuoteOfDay } from "../utils/quotes";
+
+export function parseScriptureRef(scriptureRef?: string) {
+  if (!scriptureRef) return null;
+  let cleaned = scriptureRef.replace(/([A-Za-z]+)\s+\1/gi, "$1").trim();
+  cleaned = cleaned.replace(/2 Chronicles onicles/gi, "2 Chronicles");
+  cleaned = cleaned.replace(/1 Chronicles onicles/gi, "1 Chronicles");
+
+  const match = cleaned.match(/^((?:\d\s+)?[A-Za-z\s]+?)\s+(\d+)(?::(\d+))?/);
+  if (match) {
+    const book = match[1].trim();
+    const chapter = parseInt(match[2], 10);
+    const verse = match[3] ? parseInt(match[3], 10) : undefined;
+    return { book, chapter, verse };
+  }
+  return null;
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -289,7 +306,21 @@ export default function HomeScreen() {
                   {todayDevotion.scriptureRef || "Daily Reading"}
                 </Text>
                 <Pressable
-                  onPress={() => router.push("/bible")}
+                  onPress={() => {
+                    const parsed = parseScriptureRef(todayDevotion.scriptureRef);
+                    if (parsed) {
+                      router.push({
+                        pathname: "/bible",
+                        params: {
+                          book: parsed.book,
+                          chapter: parsed.chapter.toString(),
+                          verse: parsed.verse ? parsed.verse.toString() : undefined,
+                        },
+                      });
+                    } else {
+                      router.push("/bible");
+                    }
+                  }}
                   className="py-1.5 px-3 rounded-lg bg-[#E0E1E6] dark:bg-[#2E3135] active:opacity-70"
                 >
                   <Text className="text-xs font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
@@ -473,10 +504,10 @@ export default function HomeScreen() {
             Daily Quote
           </Text>
           <Text className="text-base italic leading-6 text-[#2C2A29] dark:text-[#E5E7EB] mb-2 font-serif">
-            "{appSettings?.daily_quote_text || MOCK_QUOTES[0].text}"
+            "{appSettings?.daily_quote_text || getQuoteOfDay().text}"
           </Text>
           <Text className="text-xs text-right font-semibold text-[#60646C] dark:text-[#B0B4BA]">
-            — {appSettings?.daily_quote_author || MOCK_QUOTES[0].author}
+            — {appSettings?.daily_quote_author || getQuoteOfDay().author}
           </Text>
         </View>
       </ScrollView>

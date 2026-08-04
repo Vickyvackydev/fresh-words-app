@@ -120,9 +120,11 @@ export default function DevotionReader({
 
   const handleShare = async () => {
     try {
+      const shareUrl = `freshwordsapp://devotional/${devotional.id}`;
       await Share.share({
-        message: `Fresh Words Devotional: "${devotional.title}" (${devotional.scriptureRef})\n\n${devotional.body[0]}`,
+        message: `📖 "${devotional.title}" (${devotional.scriptureRef})\n\n${devotional.body[0]}\n\nRead more in Fresh Devotionals app: ${shareUrl}`,
         title: devotional.title,
+        url: shareUrl,
       });
     } catch (error) {
       console.log("Error sharing:", error);

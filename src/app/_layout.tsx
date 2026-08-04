@@ -655,12 +655,15 @@ function PeacefulSplashScreen() {
         {appSettings?.app_logo_url ? (
           <Image
             source={{ uri: appSettings.app_logo_url }}
-            className="w-48 h-48 rounded-3xl shadow-sm"
+            resizeMode="contain"
+            className="w-48 h-48"
           />
         ) : (
-          <View className="w-48 h-48 rounded-full bg-[#FEF3C7] dark:bg-[#252525] justify-center items-center shadow-sm">
-            <Text className="text-6xl">🕊️</Text>
-          </View>
+          <Image
+            source={require("../../assets/images/splash-icon.png")}
+            resizeMode="contain"
+            className="w-48 h-48"
+          />
         )}
       </Animated.View>
 
