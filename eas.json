@@ -15,6 +15,7 @@
       }
     },
     "production": {
+      "channel": "production",
       "ios": {
         "simulator": false
       }
