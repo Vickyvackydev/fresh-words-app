@@ -35,7 +35,7 @@ export default function DevotionReader({
   onPrev,
 }: DevotionReaderProps) {
   const insets = useSafeAreaInsets();
-  const { isDark, fontSize, setFontSize } = useApp();
+  const { isDark, fontSize, setFontSize, saveProgress } = useApp();
   const [showControls, setShowControls] = useState<boolean>(false);
   const [checkedActions, setCheckedActions] = useState<Record<string, boolean>>(
     {},
@@ -53,9 +53,12 @@ export default function DevotionReader({
     }
   }, [rawDevotional]);
 
-  // Track devotional read events
+  // Track devotional read events & save reading progress locally
   useEffect(() => {
     if (visible && rawDevotional) {
+      if (saveProgress) {
+        saveProgress(rawDevotional.id, 1);
+      }
       const baseUrl = getBaseUrl();
       fetch(`${baseUrl}/devotionals/read`, {
         method: "POST",

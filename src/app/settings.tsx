@@ -125,6 +125,31 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleRateApp = () => {
+    setRateUsVisible(false);
+    const appId = "com.freshdevotionals.app";
+    if (Platform.OS === "android") {
+      const playStoreUrl = `market://details?id=${appId}`;
+      const webUrl = `https://play.google.com/store/apps/details?id=${appId}`;
+      Linking.canOpenURL(playStoreUrl)
+        .then((supported) => {
+          if (supported) {
+            Linking.openURL(playStoreUrl);
+          } else {
+            Linking.openURL(webUrl);
+          }
+        })
+        .catch(() => Linking.openURL(webUrl));
+    } else {
+      const iosUrl = appSettings?.app_store_url || `itms-apps://apps.apple.com/app/id6740000000`;
+      Linking.openURL(iosUrl).catch(() => {
+        if (appSettings?.app_store_url) {
+          Linking.openURL(appSettings.app_store_url);
+        }
+      });
+    }
+  };
+
   return (
     <SafeAreaView
       edges={["left", "right", "top"]}
@@ -506,7 +531,7 @@ export default function SettingsScreen() {
               Your ratings help us spread encouraging messages around the world.
             </Text>
             <Pressable
-              onPress={() => setRateUsVisible(false)}
+              onPress={handleRateApp}
               className="w-full bg-[#1E40AF] dark:bg-[#2563EB] h-12 rounded-xl items-center justify-center active:opacity-90 mb-3"
             >
               <Text className="text-white text-sm font-semibold">

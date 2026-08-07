@@ -63,17 +63,18 @@ export default function CalendarScreen() {
 
   const getDayStatus = (dayNum: number): "future" | "today" | "completed" | "missed" => {
     if (dayNum > todayDayNum) return "future";
-    if (dayNum === todayDayNum) return "today";
 
     const dateObj = new Date(currentYear, currentMonth, dayNum);
     const dayOfYear = getDayOfYear(dateObj);
-    const devIndex = (dayOfYear - 1) % (catDevotionals.length || 1);
+    const devIndex = catDevotionals.length > 0 ? (dayOfYear - 1) % catDevotionals.length : 0;
     const cachedDevotional = catDevotionals[devIndex];
 
-    if (cachedDevotional) {
-      const isRead = readingProgress && readingProgress[cachedDevotional.id] !== undefined;
-      if (isRead) return "completed";
-    }
+    const isRead = cachedDevotional
+      ? readingProgress && readingProgress[cachedDevotional.id] !== undefined
+      : false;
+
+    if (dayNum === todayDayNum) return "today";
+    if (isRead) return "completed";
 
     return "missed";
   };

@@ -356,9 +356,13 @@ export default function HomeScreen() {
               <View className="flex-row justify-between items-center">
                 <Pressable
                   onPress={() => openDevotional(todayDevotion)}
-                  className="flex-1 bg-[#1E40AF] dark:bg-[#2563EB] h-11 rounded-xl items-center justify-center active:opacity-90 mr-4"
+                  className="flex-1 bg-[#1E40AF] dark:bg-[#2563EB] min-h-[44px] py-2.5 px-3 rounded-xl items-center justify-center active:opacity-90 mr-2"
                 >
-                  <Text className="text-white text-sm font-semibold">
+                  <Text
+                    className="text-white text-sm font-semibold text-center"
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
                     {readingProgress[todayDevotion.id] &&
                     readingProgress[todayDevotion.id] > 0.1
                       ? "Continue Reading"
@@ -418,14 +422,18 @@ export default function HomeScreen() {
               onPress={() => router.push(act.route as any)}
               className="w-[48%] bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] p-4 rounded-2xl flex-row items-center mb-3 active:bg-[#F3EFE6] dark:active:bg-[#252525]"
             >
-              <View className="w-10 h-10 rounded-full bg-[#EEF2FF] dark:bg-[#1A1F36] items-center justify-center mr-3">
+              <View className="w-10 h-10 rounded-full bg-[#EEF2FF] dark:bg-[#1A1F36] items-center justify-center mr-3 shrink-0">
                 <Ionicons
                   name={act.icon as any}
                   size={18}
                   color={isDark ? "#60A5FA" : "#1E40AF"}
                 />
               </View>
-              <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+              <Text
+                className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6] flex-1"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
                 {act.label}
               </Text>
             </Pressable>
@@ -498,16 +506,16 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Daily Quote Card */}
-        <View className="bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#FEF3C7] dark:border-[#2B2315] rounded-3xl p-6">
+        {/* Daily Quote Card — Rendered Dynamically from quotes.ts */}
+        <View className="bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#FEF3C7] dark:border-[#2B2315] rounded-3xl p-6 mb-4">
           <Text className="text-xs font-bold tracking-wider text-[#D97706] mb-3">
             Daily Quote
           </Text>
           <Text className="text-base italic leading-6 text-[#2C2A29] dark:text-[#E5E7EB] mb-2 font-serif">
-            "{appSettings?.daily_quote_text || getQuoteOfDay().text}"
+            "{getQuoteOfDay().text}"
           </Text>
           <Text className="text-xs text-right font-semibold text-[#60646C] dark:text-[#B0B4BA]">
-            — {appSettings?.daily_quote_author || getQuoteOfDay().author}
+            — {getQuoteOfDay().author}
           </Text>
         </View>
       </ScrollView>

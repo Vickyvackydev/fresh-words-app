@@ -1,8 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColorScheme as useNativeWindColorScheme } from "nativewind";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Animated, Image, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Image, Text, TextInput, View } from "react-native";
 import { getBaseUrl } from "../api/client";
+
+// Global font scaling cap to prevent OS font size settings from breaking UI layouts
+if ((Text as any).defaultProps == null) {
+  (Text as any).defaultProps = {};
+}
+(Text as any).defaultProps.maxFontSizeMultiplier = 1.15;
+
+if ((TextInput as any).defaultProps == null) {
+  (TextInput as any).defaultProps = {};
+}
+(TextInput as any).defaultProps.maxFontSizeMultiplier = 1.15;
 
 // Safe storage wrapper — prevents app crash when native module is null
 // (can happen on first cold-boot in Expo Go before native modules register)
@@ -48,6 +59,7 @@ import {
 } from "react-native-safe-area-context";
 import "../../global.css";
 import { scheduleDailyNotifications } from "../utils/notifications";
+import { MOCK_DEVOTIONALS } from "../db/mockDb";
 // InMemory cache for native platforms, localStorage for web
 import { AppContext, useApp } from "../context/AppContext";
 
@@ -206,6 +218,8 @@ export default function RootLayout() {
 
   // Initialize storage
   useEffect(() => {
+    let currentDeviceId = "";
+
     const initStorage = async () => {
       try {
         const keys = [
@@ -230,7 +244,9 @@ export default function RootLayout() {
           storeMap[k] = v;
         });
 
-        if (storeMap.hasLaunched === "true") setHasLaunched(true);
+        if (storeMap.hasLaunched === "true" || storeMap.hasLaunched === "1") {
+          setHasLaunched(true);
+        }
         if (storeMap.permissionPromptDone === "true")
           setPermissionPromptDone(true);
         if (storeMap.devotionalPrefs)
@@ -263,6 +279,7 @@ export default function RootLayout() {
             Math.random().toString(36).substring(2, 15);
           await safeStorage.setItem("deviceId", devId);
         }
+        currentDeviceId = devId;
         setDeviceId(devId);
 
         // Load offline cached settings & devotionals
@@ -273,14 +290,30 @@ export default function RootLayout() {
           setAppSettings(loadedSettings);
         }
         if (storeMap.offlineDevotionals) {
-          devsObj = JSON.parse(storeMap.offlineDevotionals);
-          setOfflineDevotionals(devsObj);
+          try {
+            devsObj = JSON.parse(storeMap.offlineDevotionals);
+          } catch {
+            devsObj = {};
+          }
         }
 
-        // Initialize default reminder time from active category settings if not customized
-        if (!storeMap.notificationTime && loadedSettings) {
-          setNotificationTime(getCategoryTime(loadedSettings));
+        // If no cached devotionals exist at all, populate from bundled MOCK_DEVOTIONALS as default fallback
+        if (!devsObj || Object.keys(devsObj).length === 0) {
+          const fallbackMap: Record<string, any[]> = {
+            "Daily Deliverance": [],
+            "Holiness": [],
+            "Prayer": [],
+            "Yearly Devotional": [],
+          };
+          MOCK_DEVOTIONALS.forEach((d) => {
+            const cat = d.category || "Daily Deliverance";
+            if (!fallbackMap[cat]) fallbackMap[cat] = [];
+            fallbackMap[cat].push(d);
+          });
+          devsObj = fallbackMap;
         }
+
+        setOfflineDevotionals(devsObj);
 
         // Check if app was launched by tapping a notification
         if (Notifications) {
@@ -308,9 +341,16 @@ export default function RootLayout() {
             );
           }
         }
+      } catch (e) {
+        console.error("Storage initialization error:", e);
+      } finally {
+        // Unlock UI immediately from local storage
+        setLoading(false);
+      }
 
-        // Helper for fast-failing network fetches in offline mode
-        const fetchWithTimeout = async (url: string, timeoutMs = 3000) => {
+      // Background Silent Auto-Sync on App Open (Runs asynchronously without blocking UI or wiping cache)
+      const backgroundSync = async () => {
+        const fetchWithTimeout = async (url: string, timeoutMs = 3500) => {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), timeoutMs);
           try {
@@ -323,25 +363,20 @@ export default function RootLayout() {
           }
         };
 
-        // Fetch settings from server
+        // 1. Sync Settings
         try {
           const baseUrl = getBaseUrl();
           const response = await fetchWithTimeout(`${baseUrl}/settings`);
           const json = await response.json();
           if (json.success && json.data) {
             setAppSettings(json.data);
-            await safeStorage.setItem("appSettings", JSON.stringify(json.data));
-            // If user hasn't set their own reminder time, initialize/sync to active category's time from server settings!
-            const storedTime = await safeStorage.getItem("notificationTime");
-            if (!storedTime) {
-              setNotificationTime(getCategoryTime(json.data));
-            }
+            safeStorage.setItem("appSettings", JSON.stringify(json.data));
           }
         } catch {
           console.log("[Offline Mode] Using cached app settings.");
         }
 
-        // Auto-sync devotionals on launch
+        // 2. Sync Active Devotionals Packages (Never overwrite with empty array)
         try {
           const baseUrl = getBaseUrl();
           const categories = [
@@ -355,14 +390,14 @@ export default function RootLayout() {
             try {
               const res = await fetchWithTimeout(
                 `${baseUrl}/packages/active?category=${encodeURIComponent(cat)}`,
-                3000,
+                3500,
               );
               const json = await res.json();
-              if (json.success && Array.isArray(json.data)) {
+              if (json.success && Array.isArray(json.data) && json.data.length > 0) {
                 updatedCache[cat] = json.data;
               }
             } catch {
-              // silently ignore failures on single category in offline mode
+              // ignore single category fetch error offline
             }
           }
           if (Object.keys(updatedCache).length > 0) {
@@ -376,30 +411,35 @@ export default function RootLayout() {
           console.log("[Offline Mode] Using cached offline devotionals.");
         }
 
-        // Sync bookmarks from backend
+        // 3. Sync Bookmarks
         try {
-          const baseUrl = getBaseUrl();
-          const response = await fetchWithTimeout(
-            `${baseUrl}/bookmarks?device_id=${devId}`,
-          );
-          const json = await response.json();
-          if (json.success && Array.isArray(json.data)) {
-            const serverBookmarkIds = json.data.map((d: any) => d.id);
-            setBookmarks(serverBookmarkIds);
-            await safeStorage.setItem(
-              "bookmarks",
-              JSON.stringify(serverBookmarkIds),
+          if (currentDeviceId) {
+            const baseUrl = getBaseUrl();
+            const response = await fetchWithTimeout(
+              `${baseUrl}/bookmarks?device_id=${currentDeviceId}`,
             );
+            const json = await response.json();
+            if (json.success && Array.isArray(json.data)) {
+              const serverBookmarkIds = json.data.map((d: any) => d.id);
+              if (serverBookmarkIds.length > 0) {
+                setBookmarks(serverBookmarkIds);
+                safeStorage.setItem(
+                  "bookmarks",
+                  JSON.stringify(serverBookmarkIds),
+                );
+              }
+            }
           }
         } catch {
           console.log("[Offline Mode] Using local bookmarks.");
         }
-      } catch (e) {
-        console.error("Storage initialization error:", e);
-      } finally {
-        setLoading(false);
-      }
+      };
+
+      backgroundSync().catch((err) =>
+        console.warn("Background auto-sync failed:", err),
+      );
     };
+
     initStorage();
   }, []);
 
@@ -409,9 +449,9 @@ export default function RootLayout() {
     safeStorage.setItem(key, stringValue);
   };
 
-  const handleSetHasLaunched = (val: boolean) => {
+  const handleSetHasLaunched = async (val: boolean) => {
     setHasLaunched(val);
-    saveStorageItem("hasLaunched", val);
+    await safeStorage.setItem("hasLaunched", val ? "true" : "false");
   };
 
   const handleSetPermissionPromptDone = (val: boolean) => {

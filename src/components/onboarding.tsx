@@ -3,7 +3,7 @@ import { View, Text, Pressable, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface OnboardingProps {
-  onFinish: () => void;
+  onFinish: () => void | Promise<void>;
 }
 
 export default function Onboarding({ onFinish }: OnboardingProps) {
@@ -28,11 +28,11 @@ export default function Onboarding({ onFinish }: OnboardingProps) {
     },
   ];
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentPage < pages.length - 1) {
       setCurrentPage(currentPage + 1);
     } else {
-      onFinish();
+      await onFinish();
     }
   };
 
