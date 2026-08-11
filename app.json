@@ -2,7 +2,7 @@
   "expo": {
     "name": "Fresh Devotionals",
     "slug": "fresh-words-app",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "freshwordsapp",
@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.freshdevotionals.app",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -24,7 +24,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.freshdevotionals.app",
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "output": "static",

@@ -141,7 +141,9 @@ export default function SettingsScreen() {
         })
         .catch(() => Linking.openURL(webUrl));
     } else {
-      const iosUrl = appSettings?.app_store_url || `itms-apps://apps.apple.com/app/id6740000000`;
+      const iosUrl =
+        appSettings?.app_store_url ||
+        `itms-apps://apps.apple.com/app/id6740000000`;
       Linking.openURL(iosUrl).catch(() => {
         if (appSettings?.app_store_url) {
           Linking.openURL(appSettings.app_store_url);
@@ -191,7 +193,11 @@ export default function SettingsScreen() {
               onChangeText={setUserName}
               placeholder="e.g. Victor"
               placeholderTextColor={isDark ? "#888" : "#A3A3A3"}
-              style={{ paddingVertical: 0, textAlignVertical: "center", includeFontPadding: false }}
+              style={{
+                paddingVertical: 0,
+                textAlignVertical: "center",
+                includeFontPadding: false,
+              }}
               className="w-32 h-10 px-3 bg-[#FAF8F5] dark:bg-[#252527] border border-[#E0E1E6] dark:border-[#3E4249] rounded-xl text-sm text-[#1C1917] dark:text-[#F3F4F6] text-right font-semibold"
               maxLength={15}
               autoCorrect={false}
@@ -305,18 +311,38 @@ export default function SettingsScreen() {
         </Text>
         <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6">
           {[
-            { id: "daily_deliverance", category: "Daily Deliverance", desc: "Receive daily deliverance series" },
-            { id: "holiness", category: "Holiness", desc: "Receive daily holiness devotionals" },
-            { id: "prayer", category: "Prayer", desc: "Receive daily prayer & intercession" },
-            { id: "yearly_devotional", category: "Yearly Devotional", desc: "Receive full annual devotional package" },
+            {
+              id: "daily_deliverance",
+              category: "Daily Deliverance",
+              desc: "Receive daily deliverance series",
+            },
+            {
+              id: "holiness",
+              category: "Holiness",
+              desc: "Receive daily holiness devotionals",
+            },
+            {
+              id: "prayer",
+              category: "Prayer",
+              desc: "Receive daily prayer & intercession",
+            },
+            {
+              id: "yearly_devotional",
+              category: "Yearly Devotional",
+              desc: "Receive full annual devotional package",
+            },
           ].map((item, index) => {
-            const adminEnabled = appSettings ? appSettings[`${item.id}_enabled`] !== false : true;
+            const adminEnabled = appSettings
+              ? appSettings[`${item.id}_enabled`] !== false
+              : true;
             if (!adminEnabled) return null;
             const isSelected = activeDevotionalCategory === item.category;
 
             return (
               <View key={item.id}>
-                {index > 0 && <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135] mb-4" />}
+                {index > 0 && (
+                  <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135] mb-4" />
+                )}
                 <Pressable
                   onPress={() => setActiveDevotionalCategory(item.category)}
                   className="flex-row justify-between items-center active:opacity-75"
@@ -386,7 +412,6 @@ export default function SettingsScreen() {
               </Text>
             </Pressable>
           </View>
-
         </View>
 
         {/* Section 4: Support & Actions */}
@@ -434,7 +459,7 @@ export default function SettingsScreen() {
             className="flex-row justify-between items-center py-2 active:opacity-60"
           >
             <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-              About Fresh Words
+              About Fresh Devotionals
             </Text>
             <Ionicons
               name="information-circle-outline"
@@ -582,10 +607,10 @@ export default function SettingsScreen() {
                 )}
               </View>
               <Text className="text-lg font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif text-center">
-                {appSettings?.church_name || "Fresh Words Devotional"}
+                {appSettings?.church_name || "Fresh Devotionals"}
               </Text>
               <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mb-4">
-                Version 1.0.0 (Build 1)
+                Version 1.0.0
               </Text>
             </View>
 
@@ -623,28 +648,44 @@ export default function SettingsScreen() {
             <View className="gap-y-2">
               <Pressable
                 onPress={() => {
-                  const url = appSettings?.terms_of_service_url || "https://freshdevotionals.com/terms";
-                  Linking.openURL(url).catch((err) => console.warn("Cannot open terms URL:", err));
+                  const url =
+                    appSettings?.terms_of_service_url ||
+                    "https://freshdevotionals.com/terms";
+                  Linking.openURL(url).catch((err) =>
+                    console.warn("Cannot open terms URL:", err),
+                  );
                 }}
                 className="flex-row justify-between items-center py-2 active:opacity-60"
               >
                 <Text className="text-xs font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
                   Terms of Service
                 </Text>
-                <Ionicons name="open-outline" size={14} color={isDark ? "#60A5FA" : "#1E40AF"} />
+                <Ionicons
+                  name="open-outline"
+                  size={14}
+                  color={isDark ? "#60A5FA" : "#1E40AF"}
+                />
               </Pressable>
 
               <Pressable
                 onPress={() => {
-                  const url = appSettings?.privacy_policy_url || "https://freshdevotionals.com/privacy";
-                  Linking.openURL(url).catch((err) => console.warn("Cannot open privacy URL:", err));
+                  const url =
+                    appSettings?.privacy_policy_url ||
+                    "https://freshdevotionals.com/privacy";
+                  Linking.openURL(url).catch((err) =>
+                    console.warn("Cannot open privacy URL:", err),
+                  );
                 }}
                 className="flex-row justify-between items-center py-2 border-t border-[#E0E1E6]/60 dark:border-[#2E3135]/60 active:opacity-60"
               >
                 <Text className="text-xs font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
                   Privacy Policy
                 </Text>
-                <Ionicons name="open-outline" size={14} color={isDark ? "#60A5FA" : "#1E40AF"} />
+                <Ionicons
+                  name="open-outline"
+                  size={14}
+                  color={isDark ? "#60A5FA" : "#1E40AF"}
+                />
               </Pressable>
             </View>
           </View>
