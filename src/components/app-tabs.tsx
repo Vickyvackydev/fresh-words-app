@@ -97,6 +97,18 @@ export default function AppTabs() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="devotional/[id]"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="+not-found"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

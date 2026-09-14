@@ -192,31 +192,39 @@ export default function RootLayout() {
   useEffect(() => {
     const handleUrl = (url: string | null) => {
       if (!url) return;
-      const match = url.match(/devotional\/([a-f0-9-]+)/i);
-      if (match && match[1]) {
-        const devId = match[1];
-        const allDevs = Object.values(offlineDevotionals).flat();
-        const found = allDevs.find((d: any) => d.id === devId);
-        if (found) {
-          setTappedDevotional(found);
-        } else {
-          // Attempt to fetch devotional by ID from API
-          const baseUrl = getBaseUrl();
-          fetch(`${baseUrl}/devotionals/${devId}`)
-            .then((res) => res.json())
-            .then((json) => {
-              if (json && json.success && json.data) {
-                setTappedDevotional(json.data);
-              }
-            })
-            .catch((err) => {
-              console.warn("Could not fetch deep-linked devotional:", err);
-            });
+      try {
+        const match = url.match(/devotional\/([a-zA-Z0-9_-]+)/i);
+        if (match && match[1]) {
+          const devId = match[1];
+          const allDevs = Object.values(offlineDevotionals || {}).flat();
+          const found = allDevs.find((d: any) => d && d.id === devId);
+          if (found) {
+            setTappedDevotional(found);
+          } else {
+            // Attempt to fetch devotional by ID from API with 5s timeout
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            const baseUrl = getBaseUrl();
+            fetch(`${baseUrl}/devotionals/${devId}`, { signal: controller.signal })
+              .then((res) => res.json())
+              .then((json) => {
+                clearTimeout(timeout);
+                if (json && json.success && json.data) {
+                  setTappedDevotional(json.data);
+                }
+              })
+              .catch((err) => {
+                clearTimeout(timeout);
+                console.warn("Could not fetch deep-linked devotional:", err);
+              });
+          }
         }
+      } catch (err) {
+        console.warn("Deep link parse error:", err);
       }
     };
 
-    Linking.getInitialURL().then(handleUrl);
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
     const subscription = Linking.addEventListener("url", (event) =>
       handleUrl(event.url),
     );
@@ -245,6 +253,16 @@ export default function RootLayout() {
   // App loading state
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
+
+  // Hard safeguard: NEVER allow the native splash screen to remain stuck indefinitely
+  useEffect(() => {
+    const splashGuard = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+      setShowSplash(false);
+      setLoading(false);
+    }, 2500);
+    return () => clearTimeout(splashGuard);
+  }, []);
 
   // Load custom Quicksand fonts
   const [fontsLoaded, error] = useFonts({
