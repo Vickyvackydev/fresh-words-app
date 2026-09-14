@@ -450,6 +450,7 @@ export default function DevotionalsScreen() {
       {/* Devotion Reader Modal */}
       <DevotionReader
         devotional={selectedDevotional}
+        dateLabel={selectedDevotional ? selectedDevotional.date : "Devotional"}
         visible={readerVisible}
         onClose={() => setReaderVisible(false)}
         onToggleBookmark={toggleBookmark}

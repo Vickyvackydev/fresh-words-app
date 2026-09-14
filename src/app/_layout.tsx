@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColorScheme as useNativeWindColorScheme } from "nativewind";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Animated, Image, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Image, Linking, Text, TextInput, View } from "react-native";
 import { getBaseUrl } from "../api/client";
 
 // Global font scaling cap to prevent OS font size settings from breaking UI layouts
@@ -52,6 +52,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
+import * as Updates from "expo-updates";
 import { Platform } from "react-native";
 import {
   SafeAreaProvider,
@@ -186,6 +187,60 @@ export default function RootLayout() {
     );
     return () => subscription.remove();
   }, [offlineDevotionals]);
+
+  // Handle incoming deep links (e.g. freshwordsapp://devotional/:id or https://freshdevotionals.com/devotional/:id)
+  useEffect(() => {
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      const match = url.match(/devotional\/([a-f0-9-]+)/i);
+      if (match && match[1]) {
+        const devId = match[1];
+        const allDevs = Object.values(offlineDevotionals).flat();
+        const found = allDevs.find((d: any) => d.id === devId);
+        if (found) {
+          setTappedDevotional(found);
+        } else {
+          // Attempt to fetch devotional by ID from API
+          const baseUrl = getBaseUrl();
+          fetch(`${baseUrl}/devotionals/${devId}`)
+            .then((res) => res.json())
+            .then((json) => {
+              if (json && json.success && json.data) {
+                setTappedDevotional(json.data);
+              }
+            })
+            .catch((err) => {
+              console.warn("Could not fetch deep-linked devotional:", err);
+            });
+        }
+      }
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+    const subscription = Linking.addEventListener("url", (event) =>
+      handleUrl(event.url),
+    );
+    return () => subscription.remove();
+  }, [offlineDevotionals]);
+
+  // Check for OTA updates on production start
+  useEffect(() => {
+    async function checkUpdates() {
+      try {
+        if (!__DEV__) {
+          const update = await Updates.checkForUpdateAsync();
+          if (update.isAvailable) {
+            await Updates.fetchUpdateAsync();
+            await Updates.reloadAsync();
+          }
+        }
+      } catch (e) {
+        // Offline or update check failed, continue normally
+        console.log("Update check:", e);
+      }
+    }
+    checkUpdates();
+  }, []);
 
   // App loading state
   const [loading, setLoading] = useState(true);

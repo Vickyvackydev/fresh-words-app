@@ -16,6 +16,7 @@ export default function CalendarScreen() {
   // Reader state
   const [selectedDevotional, setSelectedDevotional] =
     useState<Devotional | null>(null);
+  const [readerDateLabel, setReaderDateLabel] = useState<string>("Today");
   const [readerVisible, setReaderVisible] = useState(false);
 
   const getActiveCategory = () => {
@@ -89,6 +90,35 @@ export default function CalendarScreen() {
     const dayOfYear = getDayOfYear(dateObj);
     const devIndex = (dayOfYear - 1) % catDevotionals.length;
     const cachedDevotional = catDevotionals[devIndex];
+
+    // Compute dynamic, compact date label for reader back-button
+    let label = "Today";
+    if (
+      dayNum === todayDayNum &&
+      currentMonth === now.getMonth() &&
+      currentYear === now.getFullYear()
+    ) {
+      label = "Today";
+    } else {
+      const yesterday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - 1,
+      );
+      if (
+        dateObj.getDate() === yesterday.getDate() &&
+        dateObj.getMonth() === yesterday.getMonth() &&
+        dateObj.getFullYear() === yesterday.getFullYear()
+      ) {
+        label = "Yesterday";
+      } else {
+        label = dateObj.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+      }
+    }
+    setReaderDateLabel(label);
 
     if (cachedDevotional) {
       const formatted: Devotional = {
@@ -268,6 +298,7 @@ export default function CalendarScreen() {
       {/* Reader Modal */}
       <DevotionReader
         devotional={selectedDevotional}
+        dateLabel={readerDateLabel}
         visible={readerVisible}
         onClose={() => setReaderVisible(false)}
         onToggleBookmark={toggleBookmark}

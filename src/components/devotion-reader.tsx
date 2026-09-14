@@ -14,9 +14,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getBaseUrl } from "../api/client";
 import { Devotional } from "../db/mockDb";
+import { shareDevotional } from "@/utils/shareDevotional";
 
 interface DevotionReaderProps {
   devotional: Devotional | null;
+  dateLabel?: string;
   visible: boolean;
   onClose: () => void;
   onToggleBookmark: (id: string) => void;
@@ -27,6 +29,7 @@ interface DevotionReaderProps {
 
 export default function DevotionReader({
   devotional: rawDevotional,
+  dateLabel,
   visible,
   onClose,
   onToggleBookmark,
@@ -122,16 +125,7 @@ export default function DevotionReader({
   };
 
   const handleShare = async () => {
-    try {
-      const shareUrl = `freshwordsapp://devotional/${devotional.id}`;
-      await Share.share({
-        message: `📖 "${devotional.title}" (${devotional.scriptureRef})\n\n${devotional.body[0]}\n\nRead more in Fresh Devotionals app: ${shareUrl}`,
-        title: devotional.title,
-        url: shareUrl,
-      });
-    } catch (error) {
-      console.log("Error sharing:", error);
-    }
+    await shareDevotional(devotional);
   };
 
   const triggerBookmarkAnim = () => {
@@ -158,6 +152,9 @@ export default function DevotionReader({
     }));
   };
 
+  const displayDateLabel =
+    dateLabel || (devotional.date ? devotional.date : "Today");
+
   return (
     <Modal
       transparent={true}
@@ -174,30 +171,35 @@ export default function DevotionReader({
         }}
       >
         {/* Top Header Navigation */}
-        <View className="flex-row items-center justify-between px-6 py-3 border-b border-[#E0E1E6] dark:border-[#2E3135]">
+        <View className="flex-row items-center justify-between px-4 py-3 border-b border-[#E0E1E6] dark:border-[#2E3135]">
           <Pressable
             onPress={onClose}
             hitSlop={15}
-            className="flex-row items-center active:opacity-60"
+            className="flex-row items-center active:opacity-60 max-w-[120px]"
           >
             <Ionicons
               name="chevron-back"
               size={24}
               color={isDark ? "#F3F4F6" : "#1C1917"}
             />
-            <Text className="text-sm font-medium text-[#1C1917] dark:text-[#F3F4F6] ml-1">
-              Today
+            <Text
+              className="text-sm font-medium text-[#1C1917] dark:text-[#F3F4F6] ml-1"
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {displayDateLabel}
             </Text>
           </Pressable>
 
           <Text
-            className="text-xs font-semibold tracking-wider text-[#60646C] dark:text-[#B0B4BA] max-w-[150px]"
+            className="text-xs font-semibold tracking-wider text-[#60646C] dark:text-[#B0B4BA] text-center flex-1 px-2"
             numberOfLines={1}
+            ellipsizeMode="tail"
           >
             {devotional.category}
           </Text>
 
-          <View className="flex-row items-center space-x-4">
+          <View className="flex-row items-center">
             <Pressable
               onPress={() => setShowControls(!showControls)}
               hitSlop={10}

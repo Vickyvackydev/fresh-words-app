@@ -1,5 +1,6 @@
 import DevotionReader from "@/components/devotion-reader";
 import { useApp } from "@/context/AppContext";
+import { shareDevotional } from "@/utils/shareDevotional";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Pressable, ScrollView, Share, Text, View } from "react-native";
@@ -34,16 +35,7 @@ export default function BookmarksScreen() {
   };
 
   const handleShare = async (dev: Devotional) => {
-    try {
-      const shareUrl = `freshwordsapp://devotional/${dev.id}`;
-      await Share.share({
-        message: `📖 "${dev.title}" (${dev.scriptureRef})\n\nRead more in Fresh Devotionals app: ${shareUrl}`,
-        title: dev.title,
-        url: shareUrl,
-      });
-    } catch (e) {
-      console.log(e);
-    }
+    await shareDevotional(dev);
   };
 
   // Flatten all offline devotionals across categories and map to UI schema
@@ -246,6 +238,7 @@ export default function BookmarksScreen() {
       {/* Reader Modal */}
       <DevotionReader
         devotional={selectedDevotional}
+        dateLabel={selectedDevotional ? selectedDevotional.date : "Saved"}
         visible={readerVisible}
         onClose={() => setReaderVisible(false)}
         onToggleBookmark={toggleBookmark}

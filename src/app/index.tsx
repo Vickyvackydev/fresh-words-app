@@ -1,5 +1,6 @@
 import DevotionReader from "@/components/devotion-reader";
 import { useApp } from "@/context/AppContext";
+import { shareDevotional } from "@/utils/shareDevotional";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -179,14 +180,7 @@ export default function HomeScreen() {
   };
 
   const handleShare = async (dev: Devotional) => {
-    try {
-      await Share.share({
-        message: `Fresh Devotional: "${dev.title}" (${dev.scriptureRef})\n\nRead more in the Fresh Words app!`,
-        title: dev.title,
-      });
-    } catch (e) {
-      console.log(e);
-    }
+    await shareDevotional(dev);
   };
 
   // Flatten all offline devotionals across categories and map to UI schema
@@ -284,7 +278,8 @@ export default function HomeScreen() {
           </View>
         ) : (
           <>
-            {/* Hero Section: Today's Verse Card */}
+            {/* Hero Section: Today's Verse Card (Commented out per user request) */}
+            {/*
             <View className="bg-[#FAF8F5] dark:bg-[#1C1C1E] rounded-3xl p-6 mb-6 border border-[#E0E1E6] dark:border-[#2E3135] shadow-xs">
               <View className="flex-row gap-x-2 items-center mb-3">
                 <Ionicons
@@ -305,36 +300,15 @@ export default function HomeScreen() {
                 <Text className="text-xs font-semibold text-[#60646C] dark:text-[#B0B4BA]">
                   {todayDevotion.scriptureRef || "Daily Reading"}
                 </Text>
-                <Pressable
-                  onPress={() => {
-                    const parsed = parseScriptureRef(todayDevotion.scriptureRef);
-                    if (parsed) {
-                      router.push({
-                        pathname: "/bible",
-                        params: {
-                          book: parsed.book,
-                          chapter: parsed.chapter.toString(),
-                          verse: parsed.verse ? parsed.verse.toString() : undefined,
-                        },
-                      });
-                    } else {
-                      router.push("/bible");
-                    }
-                  }}
-                  className="py-1.5 px-3 rounded-lg bg-[#E0E1E6] dark:bg-[#2E3135] active:opacity-70"
-                >
-                  <Text className="text-xs font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
-                    Read Chapter
-                  </Text>
-                </Pressable>
               </View>
             </View>
+            */}
 
             {/* Primary Action Hero: Today's Devotion Card */}
             <View className="bg-white dark:bg-[#1E1E1E] rounded-3xl p-6 mb-6 border border-[#E0E1E6] dark:border-[#2E3135] shadow-xs">
-              <View className="flex-row justify-between items-center mb-3">
-                <View className="bg-[#EEF2FF] dark:bg-[#1A1F36] px-2.5 py-1 rounded-md">
-                  <Text className="text-[10px] font-bold tracking-wider text-[#1E40AF] dark:text-[#60A5FA]">
+              <View className="flex-row justify-between items-center mb-4">
+                <View className="bg-[#EEF2FF] dark:bg-[#1E293B] px-3.5 py-1.5 rounded-xl border border-[#DBEAFE] dark:border-[#334155]">
+                  <Text className="text-sm font-bold tracking-wide text-[#1E40AF] dark:text-[#60A5FA]">
                     Today's Devotion
                   </Text>
                 </View>
@@ -343,14 +317,16 @@ export default function HomeScreen() {
                 </Text>
               </View>
 
-              <Text className="text-2xl font-bold font-serif capitalize text-[#1C1917] dark:text-[#F3F4F6] mb-2 leading-tight">
+              <Text className="text-2xl font-bold font-serif capitalize text-[#1C1917] dark:text-[#F3F4F6] mb-3 leading-tight">
                 {todayDevotion.title.toLowerCase()}
               </Text>
               <Text
-                className="text-sm leading-5 text-[#60646C] dark:text-[#B0B4BA] mb-6"
-                numberOfLines={2}
+                className="text-sm leading-6 text-[#60646C] dark:text-[#B0B4BA] mb-6"
+                numberOfLines={6}
               >
-                {todayDevotion.body[0]}
+                {Array.isArray(todayDevotion.body)
+                  ? todayDevotion.body.join("\n\n")
+                  : todayDevotion.body}
               </Text>
 
               <View className="flex-row justify-between items-center">
@@ -363,10 +339,7 @@ export default function HomeScreen() {
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
-                    {readingProgress[todayDevotion.id] &&
-                    readingProgress[todayDevotion.id] > 0.1
-                      ? "Continue Reading"
-                      : "Read Today's Devotion"}
+                    Continue Reading
                   </Text>
                 </Pressable>
 
@@ -523,6 +496,7 @@ export default function HomeScreen() {
       {/* Slide-Up Devotion Reader Modal */}
       <DevotionReader
         devotional={selectedDevotional}
+        dateLabel="Today"
         visible={readerVisible}
         onClose={() => setReaderVisible(false)}
         onToggleBookmark={toggleBookmark}
