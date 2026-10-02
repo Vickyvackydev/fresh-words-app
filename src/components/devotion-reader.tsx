@@ -2,6 +2,7 @@ import { useApp } from "@/context/AppContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Modal,
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getBaseUrl } from "../api/client";
 import { Devotional } from "../db/mockDb";
 import { shareDevotional } from "@/utils/shareDevotional";
+import { parseActionPoints } from "@/utils/safeParse";
 
 interface DevotionReaderProps {
   devotional: Devotional | null;
@@ -38,16 +40,49 @@ export default function DevotionReader({
   onPrev,
 }: DevotionReaderProps) {
   const insets = useSafeAreaInsets();
-  const { isDark, fontSize, setFontSize, saveProgress } = useApp();
+  const { isDark, fontSize, setFontSize, saveProgress, language, t } = useApp();
   const [showControls, setShowControls] = useState<boolean>(false);
   const [checkedActions, setCheckedActions] = useState<Record<string, boolean>>(
     {},
   );
+  const [translatedDevotional, setTranslatedDevotional] = useState<Devotional | null>(null);
+  const [isTranslating, setIsTranslating] = useState<boolean>(false);
+
   // Animations
   const bookmarkScale = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").height),
   ).current;
+
+  // Multi-language translation effect
+  useEffect(() => {
+    if (!language || language === "en" || !rawDevotional) {
+      setTranslatedDevotional(null);
+      setIsTranslating(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsTranslating(true);
+    const baseUrl = getBaseUrl();
+    fetch(`${baseUrl}/devotionals/${rawDevotional.id}?lang=${language}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (isMounted && json.success && json.data) {
+          setTranslatedDevotional(json.data);
+        }
+      })
+      .catch((err) => {
+        console.warn("Devotional translation deferred:", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsTranslating(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [rawDevotional?.id, language]);
 
   // Load checklist items
   useEffect(() => {
@@ -94,33 +129,32 @@ export default function DevotionReader({
     }
   }, [visible]);
 
-  if (!rawDevotional) return null;
+  const currentDevo = translatedDevotional || rawDevotional;
+  if (!currentDevo) return null;
 
   const devotional = {
-    ...rawDevotional,
+    ...currentDevo,
     scriptureRef:
-      rawDevotional.scriptureRef ||
-      (rawDevotional as any).scripture_reference ||
+      currentDevo.scriptureRef ||
+      (currentDevo as any).scripture_reference ||
       "",
     scriptureText:
-      rawDevotional.scriptureText ||
-      (rawDevotional as any).scripture_quote ||
+      currentDevo.scriptureText ||
+      (currentDevo as any).scripture_quote ||
       "",
-    body: Array.isArray(rawDevotional.body)
-      ? rawDevotional.body
-      : typeof rawDevotional.body === "string"
-        ? (rawDevotional.body as string).split("\n\n")
+    body: Array.isArray(currentDevo.body)
+      ? currentDevo.body
+      : typeof currentDevo.body === "string"
+        ? (currentDevo.body as string).split("\n\n")
         : [],
-    actionPoints: Array.isArray(rawDevotional.actionPoints)
-      ? rawDevotional.actionPoints
-      : typeof (rawDevotional as any).action_points === "string"
-        ? JSON.parse((rawDevotional as any).action_points || "[]")
-        : [],
+    actionPoints: parseActionPoints(
+      currentDevo.actionPoints || (currentDevo as any).action_points
+    ),
     date:
-      rawDevotional.date || `Day ${(rawDevotional as any).default_day || 1}`,
+      currentDevo.date || `Day ${(currentDevo as any).default_day || 1}`,
     readingTime:
-      rawDevotional.readingTime ||
-      Math.ceil(((rawDevotional.body || "").length || 1000) / 800) ||
+      currentDevo.readingTime ||
+      Math.ceil(((currentDevo.body || "").length || 1000) / 800) ||
       2,
   };
 
@@ -250,7 +284,7 @@ export default function DevotionReader({
           <View className="bg-[#F3EFE6] dark:bg-[#1E1E1E] px-6 py-4 border-b border-[#E0E1E6] dark:border-[#2E3135] space-y-4">
             <View className="flex-row justify-between items-center">
               <Text className="text-sm font-medium text-[#60646C] dark:text-[#B0B4BA]">
-                Text Size
+                {t("textSize")}
               </Text>
               <View className="flex-row items-center space-x-6">
                 <Pressable
@@ -283,9 +317,18 @@ export default function DevotionReader({
           contentContainerStyle={{ paddingVertical: 24, paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
         >
+          {isTranslating && (
+            <View className="flex-row items-center justify-center py-2.5 px-4 mb-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 gap-x-2">
+              <ActivityIndicator size="small" color={isDark ? "#60A5FA" : "#1E40AF"} />
+              <Text className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                {t("translatingContent")}
+              </Text>
+            </View>
+          )}
+
           {/* Headline details */}
           <Text className="text-xs font-medium text-[#60646C] dark:text-[#B0B4BA] mb-2 font-sans">
-            {devotional.date} • {devotional.readingTime} min read
+            {devotional.date} • {devotional.readingTime} {t("readingTime")}
           </Text>
 
           <Text
@@ -335,7 +378,7 @@ export default function DevotionReader({
                 color={isDark ? "#60A5FA" : "#1E40AF"}
               />
               <Text className="text-sm font-bold uppercase tracking-wide text-[#1E40AF] dark:text-[#60A5FA]">
-                Today's Prayer
+                {t("todayPrayer")}
               </Text>
             </View>
             <Text
@@ -355,7 +398,7 @@ export default function DevotionReader({
                 color={isDark ? "#D97706" : "#D97706"}
               />
               <Text className="text-sm font-bold uppercase tracking-wide text-[#D97706]">
-                Today's Reflection
+                {t("reflection")}
               </Text>
             </View>
             <Text
@@ -369,7 +412,7 @@ export default function DevotionReader({
           {/* Action Point Checklist */}
           <View className="mb-10">
             <Text className="text-sm font-bold uppercase tracking-wide text-[#60646C] dark:text-[#B0B4BA] mb-4">
-              Action Points
+              {t("actionPoints")}
             </Text>
             <View className="space-y-3">
               {devotional.actionPoints.map((action: string, idx: number) => {
@@ -412,7 +455,7 @@ export default function DevotionReader({
                   className="text-[#1E40AF] dark:text-[#60A5FA]"
                 />
                 <Text className="text-sm font-semibold text-[#1E40AF] dark:text-[#60A5FA] ml-1">
-                  Previous
+                  {t("previous")}
                 </Text>
               </Pressable>
             ) : (
@@ -425,7 +468,7 @@ export default function DevotionReader({
                 className="flex-row items-center py-2 active:opacity-60"
               >
                 <Text className="text-sm font-semibold text-[#1E40AF] dark:text-[#60A5FA] mr-1">
-                  Next Devotion
+                  {t("nextDevotion")}
                 </Text>
                 <Ionicons
                   name="arrow-forward-outline"

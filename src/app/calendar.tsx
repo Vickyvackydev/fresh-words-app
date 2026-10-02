@@ -8,10 +8,11 @@ import {
 } from "react-native-safe-area-context";
 import { Devotional } from "../db/mockDb";
 import { useApp } from "@/context/AppContext";
+import { parseActionPoints } from "@/utils/safeParse";
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
-  const { bookmarks, toggleBookmark, isDark, appSettings, offlineDevotionals, readingProgress, activeDevotionalCategory } = useApp();
+  const { bookmarks, toggleBookmark, isDark, appSettings, offlineDevotionals, readingProgress, activeDevotionalCategory, language, t } = useApp();
 
   // Reader state
   const [selectedDevotional, setSelectedDevotional] =
@@ -43,11 +44,10 @@ export default function CalendarScreen() {
   const currentYear = now.getFullYear();
   const todayDayNum = now.getDate();
 
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-  const monthName = `${months[currentMonth]} ${currentYear}`;
+  const monthName = now.toLocaleDateString(language || "en", {
+    month: "long",
+    year: "numeric",
+  });
 
   // Calculate days in current month
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -136,13 +136,9 @@ export default function CalendarScreen() {
           : [],
         prayer: cachedDevotional.prayer || "",
         reflection: cachedDevotional.reflection || "",
-        actionPoints: typeof cachedDevotional.action_points === "string"
-          ? (cachedDevotional.action_points.trim().startsWith("[")
-              ? JSON.parse(cachedDevotional.action_points || "[]")
-              : [cachedDevotional.action_points])
-          : Array.isArray(cachedDevotional.actionPoints)
-          ? cachedDevotional.actionPoints
-          : [],
+        actionPoints: parseActionPoints(
+          cachedDevotional.action_points || cachedDevotional.actionPoints
+        ),
       };
       setSelectedDevotional(formatted);
       setReaderVisible(true);
@@ -160,7 +156,7 @@ export default function CalendarScreen() {
     gridCells.push(d);
   }
 
-  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekdays = [t("sun"), t("mon"), t("tue"), t("wed"), t("thu"), t("fri"), t("sat")];
 
   return (
     <SafeAreaView
@@ -178,7 +174,7 @@ export default function CalendarScreen() {
       >
         {/* Header */}
         <Text className="text-2xl font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6] mb-6">
-          Calendar
+          {t("calendarTitle")}
         </Text>
 
         {/* Calendar Grid Container */}
@@ -273,7 +269,7 @@ export default function CalendarScreen() {
           <View className="flex-row items-center">
             <View className="w-3 h-3 rounded-full bg-[#1E40AF] mr-2" />
             <Text className="text-xs font-semibold text-[#60646C] dark:text-[#B0B4BA]">
-              Today
+              {t("today")}
             </Text>
           </View>
           <View className="flex-row items-center">
@@ -281,7 +277,7 @@ export default function CalendarScreen() {
               <View className="w-1 h-1 rounded-full bg-[#1E40AF] dark:bg-[#60A5FA]" />
             </View>
             <Text className="text-xs font-semibold text-[#60646C] dark:text-[#B0B4BA]">
-              Completed
+              {t("completed")}
             </Text>
           </View>
           <View className="flex-row items-center">
@@ -289,7 +285,7 @@ export default function CalendarScreen() {
               <Text className="text-[8px] font-bold text-[#EF4444]">-</Text>
             </View>
             <Text className="text-xs font-semibold text-[#60646C] dark:text-[#B0B4BA]">
-              Missed
+              {t("missed")}
             </Text>
           </View>
         </View>

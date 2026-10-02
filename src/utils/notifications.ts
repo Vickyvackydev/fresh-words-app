@@ -34,92 +34,100 @@ export async function scheduleDailyNotifications(
     return;
   }
 
-  // 1. Request notification permission
-  const settings = (await Notifications.getPermissionsAsync()) as any;
-  if (!settings.granted && settings.canAskAgain) {
-    await Notifications.requestPermissionsAsync();
-  }
-
-  // 2. Cancel existing local notification triggers
-  await Notifications.cancelAllScheduledNotificationsAsync();
-
-  if (!appSettings) return;
-
-  const categories = [
-    {
-      name: "Daily Deliverance",
-      enabled: appSettings.daily_deliverance_enabled,
-      time: customTime || appSettings.daily_deliverance_time || "08:00 AM",
-    },
-    {
-      name: "Holiness",
-      enabled: appSettings.holiness_enabled,
-      time: customTime || appSettings.holiness_time || "09:00 AM",
-    },
-    {
-      name: "Prayer",
-      enabled: appSettings.prayer_enabled,
-      time: customTime || appSettings.prayer_time || "08:30 AM",
-    },
-    {
-      name: "Yearly Devotional",
-      enabled: appSettings.yearly_devotional_enabled,
-      time: customTime || appSettings.yearly_devotional_time || "08:00 AM",
-    },
-  ];
-
-  // Strictly target ONLY the user's active/default devotional category
-  const selectedCatName = activeCategory || "Daily Deliverance";
-  const targetCategory = categories.find((c) => c.name === selectedCatName) || categories[0];
-
-  if (!targetCategory || !targetCategory.enabled) return;
-
-  const list = offlineDevotionals[targetCategory.name] || [];
-  if (list.length === 0) return;
-
-  const { hour, minute } = parseTimeStr(targetCategory.time);
-  const now = new Date();
-
-  // Schedule next 7 days of daily devotional notifications for the user's default category ONLY
-  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-    const scheduledDate = new Date();
-    scheduledDate.setDate(now.getDate() + dayOffset);
-    scheduledDate.setHours(hour);
-    scheduledDate.setMinutes(minute);
-    scheduledDate.setSeconds(0);
-    scheduledDate.setMilliseconds(0);
-
-    // If in the past for today, push to tomorrow
-    if (scheduledDate.getTime() <= now.getTime()) {
-      continue;
+  try {
+    // 1. Check notification permission (do NOT prompt aggressively on silent startup)
+    const settings = (await Notifications.getPermissionsAsync()) as any;
+    if (!settings.granted) {
+      return;
     }
 
-    const targetDayOfYear = getDayOfYear(scheduledDate);
-    const devIndex = (targetDayOfYear - 1) % list.length;
-    const devotional = list[devIndex];
+    // 2. Cancel existing local notification triggers
+    await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
 
-    if (!devotional) continue;
+    if (!appSettings) return;
 
-    const diffMs = scheduledDate.getTime() - now.getTime();
-    const seconds = Math.floor(diffMs / 1000);
-    if (seconds <= 0) continue;
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: devotional.title || `Daily ${targetCategory.name}`,
-        body: `Today's devotional is ready — Tap to read now`,
-        data: {
-          category: targetCategory.name,
-          devotionalId: devotional.id,
-          day: devotional.default_day || (devIndex + 1),
-          dayOfYear: targetDayOfYear,
-        },
+    const categories = [
+      {
+        name: "Daily Deliverance",
+        enabled: appSettings.daily_deliverance_enabled,
+        time: customTime || appSettings.daily_deliverance_time || "08:00 AM",
       },
-      trigger: {
-        type: "timeInterval",
-        seconds,
-      } as any,
-    });
+      {
+        name: "Holiness",
+        enabled: appSettings.holiness_enabled,
+        time: customTime || appSettings.holiness_time || "09:00 AM",
+      },
+      {
+        name: "Prayer",
+        enabled: appSettings.prayer_enabled,
+        time: customTime || appSettings.prayer_time || "08:30 AM",
+      },
+      {
+        name: "Yearly Devotional",
+        enabled: appSettings.yearly_devotional_enabled,
+        time: customTime || appSettings.yearly_devotional_time || "08:00 AM",
+      },
+    ];
+
+    // Strictly target ONLY the user's active/default devotional category
+    const selectedCatName = activeCategory || "Daily Deliverance";
+    const targetCategory = categories.find((c) => c.name === selectedCatName) || categories[0];
+
+    if (!targetCategory || !targetCategory.enabled) return;
+
+    const list = offlineDevotionals[targetCategory.name] || [];
+    if (list.length === 0) return;
+
+    const { hour, minute } = parseTimeStr(targetCategory.time);
+    const now = new Date();
+
+    // Schedule next 7 days of daily devotional notifications for the user's default category ONLY
+    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+      const scheduledDate = new Date();
+      scheduledDate.setDate(now.getDate() + dayOffset);
+      scheduledDate.setHours(hour);
+      scheduledDate.setMinutes(minute);
+      scheduledDate.setSeconds(0);
+      scheduledDate.setMilliseconds(0);
+
+      // If in the past for today, push to tomorrow
+      if (scheduledDate.getTime() <= now.getTime()) {
+        continue;
+      }
+
+      const targetDayOfYear = getDayOfYear(scheduledDate);
+      const devIndex = (targetDayOfYear - 1) % list.length;
+      const devotional = list[devIndex];
+
+      if (!devotional) continue;
+
+      const diffMs = scheduledDate.getTime() - now.getTime();
+      const seconds = Math.floor(diffMs / 1000);
+      if (seconds <= 0) continue;
+
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: devotional.title || `Daily ${targetCategory.name}`,
+            body: `Today's devotional is ready — Tap to read now`,
+            data: {
+              category: targetCategory.name,
+              devotionalId: devotional.id,
+              day: devotional.default_day || (devIndex + 1),
+              dayOfYear: targetDayOfYear,
+            },
+          },
+          trigger: {
+            type: "timeInterval",
+            seconds,
+          } as any,
+        });
+      } catch (e) {
+        console.warn("Could not schedule individual notification:", e);
+      }
+    }
+  } catch (err) {
+    console.warn("scheduleDailyNotifications error ignored:", err);
   }
 }
 

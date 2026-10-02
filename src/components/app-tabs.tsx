@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 
 export default function AppTabs() {
-  const { isDark } = useApp();
+  const { isDark, t } = useApp();
 
   return (
     <Tabs
@@ -28,7 +28,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: t("home"),
 
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
@@ -42,7 +42,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="devotionals"
         options={{
-          title: "Devotionals",
+          title: t("devotionals"),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "journal" : "journal-outline"}
@@ -55,7 +55,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="bible"
         options={{
-          title: "Bible",
+          title: t("bible"),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "book" : "book-outline"}
@@ -68,7 +68,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="bookmarks"
         options={{
-          title: "Bookmarks",
+          title: t("bookmarks"),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "bookmark" : "bookmark-outline"}
@@ -81,7 +81,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="calendar"
         options={{
-          title: "Calendar",
+          title: t("calendar"),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "calendar" : "calendar-outline"}
@@ -89,6 +89,18 @@ export default function AppTabs() {
               color={color}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="hymns"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="hymn/[id]"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen

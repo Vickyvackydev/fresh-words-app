@@ -1,6 +1,7 @@
 import DevotionReader from "@/components/devotion-reader";
 import { useApp } from "@/context/AppContext";
 import { shareDevotional } from "@/utils/shareDevotional";
+import { parseActionPoints } from "@/utils/safeParse";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Pressable, ScrollView, Share, Text, View } from "react-native";
@@ -19,7 +20,7 @@ type FilterCategory =
 
 export default function BookmarksScreen() {
   const insets = useSafeAreaInsets();
-  const { isDark, bookmarks, toggleBookmark, offlineDevotionals } = useApp();
+  const { isDark, bookmarks, toggleBookmark, offlineDevotionals, t } = useApp();
 
   const [activeCategory, setActiveCategory] = useState<FilterCategory>("All");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
@@ -57,12 +58,7 @@ export default function BookmarksScreen() {
             : [],
       prayer: d.prayer || "",
       reflection: d.reflection || "",
-      actionPoints:
-        typeof d.action_points === "string"
-          ? d.action_points.trim().startsWith("[")
-            ? JSON.parse(d.action_points || "[]")
-            : [d.action_points]
-          : [],
+      actionPoints: parseActionPoints(d.action_points || d.actionPoints),
     }));
 
   // Filter & Sort Bookmarks
@@ -95,7 +91,7 @@ export default function BookmarksScreen() {
         {/* Header */}
         <View className="flex-row justify-between items-center mb-6">
           <Text className="text-2xl font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
-            Bookmarks
+            {t("bookmarksTitle")}
           </Text>
           <Pressable
             onPress={() =>
@@ -109,7 +105,7 @@ export default function BookmarksScreen() {
               color={isDark ? "#B0B4BA" : "#60646C"}
             />
             <Text className="text-xs font-semibold text-[#60646C] dark:text-[#B0B4BA] capitalize">
-              {sortOrder}
+              {sortOrder === "newest" ? t("newest") : t("oldest")}
             </Text>
           </Pressable>
         </View>
@@ -130,6 +126,16 @@ export default function BookmarksScreen() {
             ] as FilterCategory[]
           ).map((cat) => {
             const isActive = activeCategory === cat;
+            const getCatLabel = (c: string) => {
+              switch (c) {
+                case "All": return t("all");
+                case "Daily Deliverance": return t("dailyDeliverance");
+                case "Holiness": return t("holiness");
+                case "Prayer": return t("prayer");
+                case "Yearly Devotional": return t("yearlyDevotional");
+                default: return c;
+              }
+            };
             return (
               <Pressable
                 key={cat}
@@ -147,7 +153,7 @@ export default function BookmarksScreen() {
                       : "text-[#60646C] dark:text-[#B0B4BA]"
                   }`}
                 >
-                  {cat}
+                  {getCatLabel(cat)}
                 </Text>
               </Pressable>
             );
@@ -165,11 +171,10 @@ export default function BookmarksScreen() {
               />
             </View>
             <Text className="text-lg font-bold text-center text-[#1C1917] dark:text-[#F3F4F6] mb-2 font-serif">
-              No bookmarks yet
+              {t("noBookmarksSaved")}
             </Text>
             <Text className="text-sm text-center leading-5 text-[#60646C] dark:text-[#B0B4BA] max-w-[240px]">
-              Tap the bookmark icon on any daily devotional to save it for easy
-              access later.
+              {t("noBookmarksSub")}
             </Text>
           </View>
         ) : (
@@ -194,8 +199,8 @@ export default function BookmarksScreen() {
                   onPress={() => openDevotional(dev)}
                   className="active:opacity-75"
                 >
-                  <Text className="text-lg font-bold capitalize text-[#1C1917] dark:text-[#F3F4F6] font-serif mb-2 leading-tight">
-                    {dev.title.toLowerCase()}
+                  <Text className="text-lg font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif mb-2 leading-tight">
+                    {dev.title}
                   </Text>
                   <Text
                     className="text-sm leading-5 text-[#60646C] dark:text-[#B0B4BA] mb-4"
@@ -238,7 +243,7 @@ export default function BookmarksScreen() {
       {/* Reader Modal */}
       <DevotionReader
         devotional={selectedDevotional}
-        dateLabel={selectedDevotional ? selectedDevotional.date : "Saved"}
+        dateLabel={selectedDevotional ? selectedDevotional.date : t("bookmarks")}
         visible={readerVisible}
         onClose={() => setReaderVisible(false)}
         onToggleBookmark={toggleBookmark}

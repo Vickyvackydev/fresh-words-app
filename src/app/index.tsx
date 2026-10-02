@@ -4,13 +4,15 @@ import { shareDevotional } from "@/utils/shareDevotional";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Share, Text, View } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Devotional, MOCK_QUOTES } from "../db/mockDb";
 import { getQuoteOfDay } from "../utils/quotes";
+import { parseActionPoints } from "../utils/safeParse";
+import { getBaseUrl } from "../api/client";
 
 export function parseScriptureRef(scriptureRef?: string) {
   if (!scriptureRef) return null;
@@ -45,6 +47,8 @@ export default function HomeScreen() {
     setTappedDevotional,
     userName,
     activeDevotionalCategory,
+    language,
+    t,
   } = useApp();
 
   const getActiveCategory = () => {
@@ -71,11 +75,11 @@ export default function HomeScreen() {
   // Dynamic greeting based on time of day
   const getGreeting = () => {
     const hour = now.getHours();
-    let greet = "Good Morning";
+    let greet = t("goodMorning");
     if (hour >= 12 && hour < 17) {
-      greet = "Good Afternoon";
+      greet = t("goodAfternoon");
     } else if (hour >= 17) {
-      greet = "Good Evening";
+      greet = t("goodEvening");
     }
     return userName.trim() ? `${greet}, ${userName.trim()}` : greet;
   };
@@ -93,34 +97,57 @@ export default function HomeScreen() {
   const devIndex = (dayOfYear - 1) % (catDevotionals.length || 1);
   const cachedDevotional = catDevotionals[devIndex];
 
+  // Translation support for today's devotion preview
+  const [translatedTodayDevo, setTranslatedTodayDevo] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!language || language === "en" || !cachedDevotional?.id) {
+      setTranslatedTodayDevo(null);
+      return;
+    }
+    let isMounted = true;
+    const baseUrl = getBaseUrl();
+    fetch(`${baseUrl}/devotionals/${cachedDevotional.id}?lang=${language}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (isMounted && json.success && json.data) {
+          setTranslatedTodayDevo(json.data);
+        }
+      })
+      .catch((err) => {
+        console.warn("Home preview translation deferred:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [cachedDevotional?.id, language]);
+
+  const activeDevo = translatedTodayDevo || cachedDevotional;
+
   // Map cached API format to Devotional interface expected by reader & components
-  const todayDevotion: Devotional | null = cachedDevotional
+  const todayDevotion: Devotional | null = activeDevo
     ? {
-        id: cachedDevotional.id,
-        category: cachedDevotional.category,
-        title: cachedDevotional.title,
-        date: `Day ${cachedDevotional.default_day || devIndex + 1}`,
+        id: activeDevo.id,
+        category: activeDevo.category,
+        title: activeDevo.title,
+        date: `Day ${activeDevo.default_day || devIndex + 1}`,
         readingTime: Math.ceil(
-          ((cachedDevotional.body || "").length || 1000) / 800,
+          ((activeDevo.body || "").length || 1000) / 800,
         ),
-        scriptureRef: cachedDevotional.scripture_reference || "",
-        scriptureText: cachedDevotional.scripture_quote || "",
+        scriptureRef: activeDevo.scripture_reference || activeDevo.scriptureRef || "",
+        scriptureText: activeDevo.scripture_quote || activeDevo.scriptureText || "",
         body:
-          typeof cachedDevotional.body === "string"
-            ? cachedDevotional.body.split("\n\n")
-            : Array.isArray(cachedDevotional.body)
-              ? cachedDevotional.body
+          typeof activeDevo.body === "string"
+            ? activeDevo.body.split("\n\n")
+            : Array.isArray(activeDevo.body)
+              ? activeDevo.body
               : [],
-        prayer: cachedDevotional.prayer || "",
-        reflection: cachedDevotional.reflection || "",
-        actionPoints:
-          typeof cachedDevotional.action_points === "string"
-            ? (cachedDevotional.action_points.trim().startsWith("[")
-                ? JSON.parse(cachedDevotional.action_points || "[]")
-                : [cachedDevotional.action_points])
-            : Array.isArray(cachedDevotional.actionPoints)
-              ? cachedDevotional.actionPoints
-              : [],
+        prayer: activeDevo.prayer || "",
+        reflection: activeDevo.reflection || "",
+        actionPoints: parseActionPoints(
+          activeDevo.action_points || activeDevo.actionPoints,
+        ),
       }
     : null;
 
@@ -150,14 +177,9 @@ export default function HomeScreen() {
               : [],
         prayer: tappedDevotional.prayer || "",
         reflection: tappedDevotional.reflection || "",
-        actionPoints:
-          typeof tappedDevotional.action_points === "string"
-            ? (tappedDevotional.action_points.trim().startsWith("[")
-                ? JSON.parse(tappedDevotional.action_points || "[]")
-                : [tappedDevotional.action_points])
-            : Array.isArray(tappedDevotional.actionPoints)
-              ? tappedDevotional.actionPoints
-              : [],
+        actionPoints: parseActionPoints(
+          tappedDevotional.action_points || tappedDevotional.actionPoints,
+        ),
       };
       setSelectedDevotional(formatted);
       setReaderVisible(true);
@@ -202,12 +224,7 @@ export default function HomeScreen() {
             : [],
       prayer: d.prayer || "",
       reflection: d.reflection || "",
-      actionPoints:
-        typeof d.action_points === "string"
-          ? (d.action_points.trim().startsWith("[")
-              ? JSON.parse(d.action_points || "[]")
-              : [d.action_points])
-          : [],
+      actionPoints: parseActionPoints(d.action_points || d.actionPoints),
     }));
 
   const bookmarkedList = allOfflineDevs.filter((d) => bookmarks.includes(d.id));
@@ -261,18 +278,17 @@ export default function HomeScreen() {
               />
             </View>
             <Text className="text-lg font-bold text-[#1C1917] dark:text-[#F3F4F6] mb-2 text-center font-serif">
-              Sync Today's Devotional
+              {t("syncTodayDevotional")}
             </Text>
             <Text className="text-sm text-[#60646C] dark:text-[#B0B4BA] mb-6 text-center leading-5 max-w-xs">
-              No offline devotionals are cached yet. Connect to the internet and
-              tap sync to download.
+              {t("noOfflineDevotionalsCached")}
             </Text>
             <Pressable
               onPress={() => router.push("/settings")}
               className="w-full bg-[#1E40AF] dark:bg-[#2563EB] h-11 rounded-xl items-center justify-center active:opacity-90"
             >
               <Text className="text-white text-sm font-semibold">
-                Go to Settings & Sync
+                {t("goToSettingsSync")}
               </Text>
             </Pressable>
           </View>
@@ -309,16 +325,16 @@ export default function HomeScreen() {
               <View className="flex-row justify-between items-center mb-4">
                 <View className="bg-[#EEF2FF] dark:bg-[#1E293B] px-3.5 py-1.5 rounded-xl border border-[#DBEAFE] dark:border-[#334155]">
                   <Text className="text-sm font-bold tracking-wide text-[#1E40AF] dark:text-[#60A5FA]">
-                    Today's Devotion
+                    {t("todayDevotion")}
                   </Text>
                 </View>
                 <Text className="text-xs font-medium text-[#60646C] dark:text-[#B0B4BA]">
-                  {todayDevotion.readingTime} min read
+                  {todayDevotion.readingTime} {t("minRead")}
                 </Text>
               </View>
 
-              <Text className="text-2xl font-bold font-serif capitalize text-[#1C1917] dark:text-[#F3F4F6] mb-3 leading-tight">
-                {todayDevotion.title.toLowerCase()}
+              <Text className="text-2xl font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6] mb-3 leading-tight">
+                {todayDevotion.title}
               </Text>
               <Text
                 className="text-sm leading-6 text-[#60646C] dark:text-[#B0B4BA] mb-6"
@@ -339,7 +355,7 @@ export default function HomeScreen() {
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
-                    Continue Reading
+                    {t("readFullDevotional")}
                   </Text>
                 </Pressable>
 
@@ -381,14 +397,14 @@ export default function HomeScreen() {
 
         {/* Quick Action Navigation Grid */}
         <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-4">
-          Quick Actions
+          {t("quickActions")}
         </Text>
         <View className="flex-row flex-wrap justify-between mb-8">
           {[
-            { label: "Bible", icon: "book", route: "/bible" },
-            { label: "Bookmarks", icon: "bookmark", route: "/bookmarks" },
-            { label: "Calendar", icon: "calendar", route: "/calendar" },
-            { label: "Devotionals", icon: "journal", route: "/devotionals" },
+            { label: t("bible"), icon: "book", route: "/bible" },
+            { label: t("devotionals"), icon: "journal", route: "/devotionals" },
+            { label: t("hymnal"), icon: "musical-notes", route: "/hymns" },
+            { label: t("bookmarks"), icon: "bookmark", route: "/bookmarks" },
           ].map((act, index) => (
             <Pressable
               key={index}
@@ -426,7 +442,7 @@ export default function HomeScreen() {
                 color={isDark ? "#60A5FA" : "#1E40AF"}
               />
               <Text className="text-xs font-bold uppercase tracking-wider text-[#1E40AF] dark:text-[#60A5FA]">
-                Today's Prayer
+                {t("todayPrayer")}
               </Text>
             </View>
             <Text
@@ -436,7 +452,7 @@ export default function HomeScreen() {
               "{todayDevotion.prayer}"
             </Text>
             <Text className="text-xs font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
-              Read Prayer Devotional →
+              {t("readPrayerDevotional")} →
             </Text>
           </Pressable>
         ) : null}
@@ -445,7 +461,7 @@ export default function HomeScreen() {
         {bookmarkedList.length > 0 && (
           <View className="mb-6">
             <Text className="text-xs font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-4">
-              Recently Bookmarked
+              {t("recentlyBookmarked")}
             </Text>
             <ScrollView
               horizontal
@@ -482,13 +498,13 @@ export default function HomeScreen() {
         {/* Daily Quote Card — Rendered Dynamically from quotes.ts */}
         <View className="bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#FEF3C7] dark:border-[#2B2315] rounded-3xl p-6 mb-4">
           <Text className="text-xs font-bold tracking-wider text-[#D97706] mb-3">
-            Daily Quote
+            {t("dailyQuote")}
           </Text>
           <Text className="text-base italic leading-6 text-[#2C2A29] dark:text-[#E5E7EB] mb-2 font-serif">
-            "{getQuoteOfDay().text}"
+            "{getQuoteOfDay(undefined, language).text}"
           </Text>
           <Text className="text-xs text-right font-semibold text-[#60646C] dark:text-[#B0B4BA]">
-            — {getQuoteOfDay().author}
+            — {getQuoteOfDay(undefined, language).author}
           </Text>
         </View>
       </ScrollView>
@@ -496,7 +512,7 @@ export default function HomeScreen() {
       {/* Slide-Up Devotion Reader Modal */}
       <DevotionReader
         devotional={selectedDevotional}
-        dateLabel="Today"
+        dateLabel={t("today")}
         visible={readerVisible}
         onClose={() => setReaderVisible(false)}
         onToggleBookmark={toggleBookmark}

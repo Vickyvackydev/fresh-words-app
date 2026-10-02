@@ -15,6 +15,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Devotional } from "../db/mockDb";
+import { parseActionPoints } from "@/utils/safeParse";
 
 const CATEGORY_METADATA: Record<
   string,
@@ -61,7 +62,28 @@ export default function DevotionalsScreen() {
     readingProgress,
     bookmarks,
     toggleBookmark,
+    t,
   } = useApp();
+
+  const getCategoryDisplayName = (cat: string) => {
+    switch (cat) {
+      case "Daily Deliverance": return t("dailyDeliverance");
+      case "Holiness": return t("holiness");
+      case "Prayer": return t("prayer");
+      case "Yearly Devotional": return t("yearlyDevotional");
+      default: return cat;
+    }
+  };
+
+  const getCategoryDesc = (cat: string) => {
+    switch (cat) {
+      case "Daily Deliverance": return t("dailyDeliveranceDesc");
+      case "Holiness": return t("holinessDesc");
+      case "Prayer": return t("prayerDesc");
+      case "Yearly Devotional": return t("yearlyDevotionalDesc");
+      default: return CATEGORY_METADATA[cat]?.desc || "";
+    }
+  };
 
   // Navigation flow state: 'categories' | 'days'
   const [viewMode, setViewMode] = useState<"categories" | "days">("categories");
@@ -104,14 +126,7 @@ export default function DevotionalsScreen() {
             : [],
       prayer: d.prayer || "",
       reflection: d.reflection || "",
-      actionPoints:
-        typeof d.action_points === "string"
-          ? d.action_points.trim().startsWith("[")
-            ? JSON.parse(d.action_points || "[]")
-            : [d.action_points]
-          : Array.isArray(d.actionPoints)
-            ? d.actionPoints
-            : [],
+      actionPoints: parseActionPoints(d.action_points || d.actionPoints),
     }),
   );
 
@@ -149,10 +164,10 @@ export default function DevotionalsScreen() {
         >
           {/* Header */}
           <Text className="text-2xl font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6] mb-2">
-            Devotionals
+            {t("devotionalsTitle")}
           </Text>
           <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mb-6">
-            Browse all available devotional series & set your primary reader
+            {t("devotionalsSubtitle")}
           </Text>
 
           {/* Active Default Banner */}
@@ -163,23 +178,23 @@ export default function DevotionalsScreen() {
               </View>
               <View className="flex-1">
                 <Text className="text-[10px] font-bold tracking-wider text-[#1E40AF] dark:text-[#60A5FA]">
-                  Active Default Devotional
+                  {t("activeDefaultBanner")}
                 </Text>
                 <Text className="text-sm font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
-                  {activeDevotionalCategory}
+                  {getCategoryDisplayName(activeDevotionalCategory)}
                 </Text>
               </View>
             </View>
             <View className="px-2.5 py-1 rounded-full bg-[#1E40AF]/10 dark:bg-[#60A5FA]/20">
               <Text className="text-[10px] font-bold text-[#1E40AF] dark:text-[#60A5FA]">
-                Reminders On
+                {t("remindersOn")}
               </Text>
             </View>
           </View>
 
           {/* Categories Grid / Cards List */}
           <Text className="text-xs font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-4">
-            Available Categories
+            {t("availableCategories")}
           </Text>
 
           <View className="gap-y-4">
@@ -226,11 +241,11 @@ export default function DevotionalsScreen() {
                         </View>
                         <View>
                           <Text className="text-lg font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
-                            {catName}
+                            {getCategoryDisplayName(catName)}
                           </Text>
                           <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
                             {devsCount > 0
-                              ? `${devsCount} Days Available`
+                              ? `${devsCount} ${t("daysCount")}`
                               : "Cached Offline"}
                           </Text>
                         </View>
@@ -244,7 +259,7 @@ export default function DevotionalsScreen() {
                             color="#FFF"
                           />
                           <Text className="text-[10px] font-bold text-white">
-                            Default
+                            {t("default")}
                           </Text>
                         </View>
                       )}
@@ -252,7 +267,7 @@ export default function DevotionalsScreen() {
 
                     {/* Description */}
                     <Text className="text-xs leading-5 text-[#60646C] dark:text-[#B0B4BA] mb-4">
-                      {meta.desc}
+                      {getCategoryDesc(catName)}
                     </Text>
                   </Pressable>
 
@@ -269,7 +284,7 @@ export default function DevotionalsScreen() {
                           color={isDark ? "#60A5FA" : "#1E40AF"}
                         />
                         <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA]">
-                          Set as Default
+                          {t("setAsDefault")}
                         </Text>
                       </Pressable>
                     ) : (
@@ -286,7 +301,7 @@ export default function DevotionalsScreen() {
                       className="flex-row items-center gap-x-1 py-1.5 px-3 rounded-xl bg-[#1E40AF] dark:bg-[#2563EB] active:opacity-90"
                     >
                       <Text className="text-xs font-bold text-white">
-                        Explore Days
+                        {t("openSeries") || "Explore Days"}
                       </Text>
                       <Ionicons
                         name="chevron-forward"
@@ -317,11 +332,11 @@ export default function DevotionalsScreen() {
                 color={isDark ? "#60A5FA" : "#1E40AF"}
               />
               <Text className="text-sm font-semibold text-[#1E40AF] dark:text-[#60A5FA] ml-1">
-                Library
+                {t("availableCategories") || "Categories"}
               </Text>
             </Pressable>
             <Text className="text-lg font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
-              {activeCatKey}
+              {getCategoryDisplayName(activeCatKey)}
             </Text>
             <Pressable
               onPress={() => setActiveDevotionalCategory(activeCatKey)}
@@ -356,7 +371,7 @@ export default function DevotionalsScreen() {
             <TextInput
               value={daySearchQuery}
               onChangeText={setDaySearchQuery}
-              placeholder="Search day or title..."
+              placeholder={t("searchDevotionalsPlaceholder")}
               placeholderTextColor={isDark ? "#B0B4BA" : "#60646C"}
               className="flex-1 h-full py-0 mb-2 text-sm text-[#1C1917] dark:text-[#F3F4F6] font-sans"
               autoCorrect={false}
@@ -386,11 +401,7 @@ export default function DevotionalsScreen() {
                   color={isDark ? "#B0B4BA" : "#60646C"}
                 />
                 <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6] mt-3">
-                  No days found
-                </Text>
-                <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mt-1 text-center">
-                  Try searching a different title or sync devotionals in
-                  settings.
+                  {t("noDevotionalsFound")}
                 </Text>
               </View>
             )}
@@ -412,10 +423,10 @@ export default function DevotionalsScreen() {
 
                     <View className="flex-1">
                       <Text
-                        className="text-sm font-bold capitalize text-[#1C1917] dark:text-[#F3F4F6] font-serif"
+                        className="text-sm font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif"
                         numberOfLines={1}
                       >
-                        {item.title.toLowerCase()}
+                        {item.title}
                       </Text>
                       <Text
                         className="text-[11px] text-[#60646C] dark:text-[#B0B4BA]"
@@ -450,7 +461,7 @@ export default function DevotionalsScreen() {
       {/* Devotion Reader Modal */}
       <DevotionReader
         devotional={selectedDevotional}
-        dateLabel={selectedDevotional ? selectedDevotional.date : "Devotional"}
+        dateLabel={selectedDevotional ? selectedDevotional.date : t("devotionals")}
         visible={readerVisible}
         onClose={() => setReaderVisible(false)}
         onToggleBookmark={toggleBookmark}

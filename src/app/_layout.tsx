@@ -1,7 +1,43 @@
+import AppTabs from "@/components/app-tabs";
+import Onboarding from "@/components/onboarding";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Constants from "expo-constants";
+import { useFonts } from "expo-font";
+import {
+  DarkTheme as NavigationDarkTheme,
+  DefaultTheme as NavigationDefaultTheme,
+  ThemeProvider,
+} from "expo-router/react-navigation";
+import * as SplashScreen from "expo-splash-screen";
+import * as Updates from "expo-updates";
 import { useColorScheme as useNativeWindColorScheme } from "nativewind";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Animated, Image, Linking, Text, TextInput, View } from "react-native";
+import { Platform } from "react-native";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import "../../global.css";
+import { MOCK_HYMNS } from "../db/hymns";
+import { MOCK_DEVOTIONALS } from "../db/mockDb";
+import { scheduleDailyNotifications } from "../utils/notifications";
+import { safeJsonParse } from "../utils/safeParse";
+import { getTranslation } from "../utils/i18n";
+import UpdateModal from "@/components/UpdateModal";
+import { checkAppUpdateStatus, AppUpdateCheckResult } from "../utils/appUpdate";
+// InMemory cache for native platforms, localStorage for web
+import { AppContext, useApp } from "../context/AppContext";
+
+import {
+  ActivityIndicator,
+  Animated,
+  Image,
+  Linking,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { getBaseUrl } from "../api/client";
 
 // Global font scaling cap to prevent OS font size settings from breaking UI layouts
@@ -17,6 +53,8 @@ if ((TextInput as any).defaultProps == null) {
 
 // Safe storage wrapper — prevents app crash when native module is null
 // (can happen on first cold-boot in Expo Go before native modules register)
+// Safe storage wrapper — prevents app crash when native module is null
+// (can happen on first cold-boot in Expo Go before native modules register)
 const safeStorage = {
   async getItem(key: string): Promise<string | null> {
     try {
@@ -28,41 +66,31 @@ const safeStorage = {
   async setItem(key: string, value: string): Promise<void> {
     try {
       await AsyncStorage.setItem(key, value);
-    } catch {
-      // silently ignore — in-memory state still works
+    } catch (e) {
+      console.warn(`safeStorage setItem error for "${key}":`, e);
     }
   },
   async multiGet(keys: string[]): Promise<readonly [string, string | null][]> {
     try {
       return await AsyncStorage.multiGet(keys);
-    } catch {
-      return keys.map((k) => [k, null]);
+    } catch (err) {
+      console.warn(
+        "safeStorage multiGet failed, recovering with individual getItems:",
+        err,
+      );
+      const results: [string, string | null][] = [];
+      for (const k of keys) {
+        try {
+          const val = await AsyncStorage.getItem(k);
+          results.push([k, val]);
+        } catch {
+          results.push([k, null]);
+        }
+      }
+      return results;
     }
   },
 };
-
-import AppTabs from "@/components/app-tabs";
-import Onboarding from "@/components/onboarding";
-import {
-  DarkTheme as NavigationDarkTheme,
-  DefaultTheme as NavigationDefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import Constants from "expo-constants";
-import { useFonts } from "expo-font";
-import * as SplashScreen from "expo-splash-screen";
-import * as Updates from "expo-updates";
-import { Platform } from "react-native";
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import "../../global.css";
-import { scheduleDailyNotifications } from "../utils/notifications";
-import { MOCK_DEVOTIONALS } from "../db/mockDb";
-// InMemory cache for native platforms, localStorage for web
-import { AppContext, useApp } from "../context/AppContext";
 
 let Notifications: any = null;
 try {
@@ -121,17 +149,66 @@ export default function RootLayout() {
   const [offlineDevotionals, setOfflineDevotionals] = useState<
     Record<string, any[]>
   >({});
+  const [offlineHymns, setOfflineHymns] = useState<any[]>(MOCK_HYMNS);
+  const [isSyncingHymns, setIsSyncingHymns] = useState(false);
+  const [hymnBookmarks, setHymnBookmarks] = useState<number[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [tappedDevotional, setTappedDevotional] = useState<any | null>(null);
   const [userName, setUserNameState] = useState("");
+  const [language, setLanguageState] = useState("en");
   const [activeDevotionalCategory, setActiveDevotionalCategoryState] =
     useState("Daily Deliverance");
-  const [devotionalPrefs, setDevotionalPrefs] = useState<Record<string, boolean>>({
+  const [devotionalPrefs, setDevotionalPrefs] = useState<
+    Record<string, boolean>
+  >({
     "Daily Deliverance": true,
-    "Holiness": true,
-    "Prayer": true,
+    Holiness: true,
+    Prayer: true,
     "Yearly Devotional": true,
   });
+
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<AppUpdateCheckResult | null>(null);
+
+  const handleCheckAppUpdate = (manualTrigger: boolean = false) => {
+    if (!appSettings) return;
+    const result = checkAppUpdateStatus(appSettings);
+    setUpdateInfo(result);
+    if (result.isUpdateAvailable) {
+      if (manualTrigger || result.isForceUpdate) {
+        setUpdateModalVisible(true);
+      } else {
+        safeStorage.getItem("lastDismissedUpdateVer").then((dismissedVer) => {
+          if (dismissedVer !== result.latestVersion) {
+            setUpdateModalVisible(true);
+          }
+        });
+      }
+    } else if (manualTrigger) {
+      alert(getTranslation("youHaveLatestVersion", language));
+    }
+  };
+
+  const handleDismissUpdate = async () => {
+    if (updateInfo) {
+      await safeStorage.setItem(
+        "lastDismissedUpdateVer",
+        updateInfo.latestVersion,
+      );
+    }
+    setUpdateModalVisible(false);
+  };
+
+  useEffect(() => {
+    if (appSettings) {
+      handleCheckAppUpdate(false);
+    }
+  }, [appSettings]);
+
+  const handleSetLanguage = async (lang: string) => {
+    setLanguageState(lang);
+    await safeStorage.setItem("language", lang);
+  };
 
   const handleSetUserName = async (name: string) => {
     setUserNameState(name);
@@ -143,7 +220,10 @@ export default function RootLayout() {
     await safeStorage.setItem("defaultDevotionalCategory", category);
   };
 
-  const handleSetDevotionalPref = async (category: string, enabled: boolean) => {
+  const handleSetDevotionalPref = async (
+    category: string,
+    enabled: boolean,
+  ) => {
     setDevotionalPrefs((prev) => {
       const updated = { ...prev, [category]: enabled };
       safeStorage.setItem("devotionalPrefs", JSON.stringify(updated));
@@ -167,7 +247,13 @@ export default function RootLayout() {
         console.warn("Failed to schedule notifications:", err);
       });
     }
-  }, [appSettings, offlineDevotionals, notificationsEnabled, notificationTime, activeDevotionalCategory]);
+  }, [
+    appSettings,
+    offlineDevotionals,
+    notificationsEnabled,
+    notificationTime,
+    activeDevotionalCategory,
+  ]);
 
   // Listen for clicked local notifications to route the user
   useEffect(() => {
@@ -205,7 +291,9 @@ export default function RootLayout() {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 5000);
             const baseUrl = getBaseUrl();
-            fetch(`${baseUrl}/devotionals/${devId}`, { signal: controller.signal })
+            fetch(`${baseUrl}/devotionals/${devId}`, {
+              signal: controller.signal,
+            })
               .then((res) => res.json())
               .then((json) => {
                 clearTimeout(timeout);
@@ -224,14 +312,16 @@ export default function RootLayout() {
       }
     };
 
-    Linking.getInitialURL().then(handleUrl).catch(() => {});
+    Linking.getInitialURL()
+      .then(handleUrl)
+      .catch(() => {});
     const subscription = Linking.addEventListener("url", (event) =>
       handleUrl(event.url),
     );
     return () => subscription.remove();
   }, [offlineDevotionals]);
 
-  // Check for OTA updates on production start
+  // Check for OTA updates on production start (silently download, apply on next natural launch)
   useEffect(() => {
     async function checkUpdates() {
       try {
@@ -239,7 +329,7 @@ export default function RootLayout() {
           const update = await Updates.checkForUpdateAsync();
           if (update.isAvailable) {
             await Updates.fetchUpdateAsync();
-            await Updates.reloadAsync();
+            // Silently ready for next natural launch — DO NOT abruptly restart and close the app
           }
         }
       } catch (e) {
@@ -307,9 +397,12 @@ export default function RootLayout() {
           "deviceId",
           "appSettings",
           "offlineDevotionals",
+          "offlineHymns",
+          "hymnBookmarks",
           "userName",
           "devotionalPrefs",
           "defaultDevotionalCategory",
+          "language",
         ];
         const stores = await safeStorage.multiGet(keys);
         const storeMap: Record<string, string | null> = {};
@@ -323,18 +416,44 @@ export default function RootLayout() {
         if (storeMap.permissionPromptDone === "true")
           setPermissionPromptDone(true);
         if (storeMap.devotionalPrefs)
-          setDevotionalPrefs(JSON.parse(storeMap.devotionalPrefs));
+          setDevotionalPrefs(
+            safeJsonParse(storeMap.devotionalPrefs, {
+              "Daily Deliverance": true,
+              Holiness: true,
+              Prayer: true,
+              "Yearly Devotional": true,
+            }),
+          );
         if (storeMap.defaultDevotionalCategory)
           setActiveDevotionalCategoryState(storeMap.defaultDevotionalCategory);
-        if (storeMap.bookmarks) setBookmarks(JSON.parse(storeMap.bookmarks));
+        if (storeMap.bookmarks)
+          setBookmarks(safeJsonParse(storeMap.bookmarks, []));
         if (storeMap.readingProgress)
-          setReadingProgress(JSON.parse(storeMap.readingProgress));
+          setReadingProgress(safeJsonParse(storeMap.readingProgress, {}));
         if (storeMap.notificationsEnabled === "false")
           setNotificationsEnabled(false);
         if (storeMap.notificationTime)
           setNotificationTime(storeMap.notificationTime);
         if (storeMap.fontSize) setFontSize(parseInt(storeMap.fontSize, 10));
         if (storeMap.userName) setUserNameState(storeMap.userName);
+        if (storeMap.language) setLanguageState(storeMap.language);
+
+        // Load offline hymns
+        if (storeMap.offlineHymns) {
+          const cachedHymns = safeJsonParse(storeMap.offlineHymns, []);
+          if (Array.isArray(cachedHymns) && cachedHymns.length > 0) {
+            setOfflineHymns(cachedHymns);
+          } else {
+            setOfflineHymns(MOCK_HYMNS);
+          }
+        } else {
+          setOfflineHymns(MOCK_HYMNS);
+        }
+
+        // Load hymn bookmarks
+        if (storeMap.hymnBookmarks) {
+          setHymnBookmarks(safeJsonParse(storeMap.hymnBookmarks, []));
+        }
 
         let storedDark = storeMap.isDark;
         if (storedDark !== null) {
@@ -374,8 +493,8 @@ export default function RootLayout() {
         if (!devsObj || Object.keys(devsObj).length === 0) {
           const fallbackMap: Record<string, any[]> = {
             "Daily Deliverance": [],
-            "Holiness": [],
-            "Prayer": [],
+            Holiness: [],
+            Prayer: [],
             "Yearly Devotional": [],
           };
           MOCK_DEVOTIONALS.forEach((d) => {
@@ -466,7 +585,11 @@ export default function RootLayout() {
                 3500,
               );
               const json = await res.json();
-              if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+              if (
+                json.success &&
+                Array.isArray(json.data) &&
+                json.data.length > 0
+              ) {
                 updatedCache[cat] = json.data;
               }
             } catch {
@@ -506,6 +629,23 @@ export default function RootLayout() {
         } catch {
           console.log("[Offline Mode] Using local bookmarks.");
         }
+
+        // 4. Sync Hymns silently
+        try {
+          const baseUrl = getBaseUrl();
+          const response = await fetchWithTimeout(`${baseUrl}/hymns/all`, 3500);
+          const json = await response.json();
+          if (
+            json.success &&
+            Array.isArray(json.data) &&
+            json.data.length > 0
+          ) {
+            setOfflineHymns(json.data);
+            safeStorage.setItem("offlineHymns", JSON.stringify(json.data));
+          }
+        } catch {
+          console.log("[Offline Mode] Using local hymn collection.");
+        }
       };
 
       backgroundSync().catch((err) =>
@@ -543,14 +683,52 @@ export default function RootLayout() {
     saveStorageItem("notificationsEnabled", val);
   };
 
-  const handleSetNotificationTime = (val: string) => {
+  const handleSetNotificationTime = async (val: string) => {
     setNotificationTime(val);
-    saveStorageItem("notificationTime", val);
+    await safeStorage.setItem("notificationTime", val);
   };
 
   const handleSetFontSize = (val: number) => {
     setFontSize(val);
     saveStorageItem("fontSize", val);
+  };
+
+  const toggleHymnBookmark = (hymnNumber: number) => {
+    setHymnBookmarks((prev) => {
+      const updated = prev.includes(hymnNumber)
+        ? prev.filter((n) => n !== hymnNumber)
+        : [...prev, hymnNumber];
+      safeStorage.setItem("hymnBookmarks", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const syncOfflineHymns = async () => {
+    setIsSyncingHymns(true);
+    try {
+      const baseUrl = getBaseUrl();
+      const res = await fetch(`${baseUrl}/hymns/all`);
+      const json = await res.json();
+      if (
+        res.ok &&
+        json.success &&
+        Array.isArray(json.data) &&
+        json.data.length > 0
+      ) {
+        setOfflineHymns(json.data);
+        await safeStorage.setItem("offlineHymns", JSON.stringify(json.data));
+        alert(
+          `Successfully synced ${json.data.length} hymns for offline reading!`,
+        );
+      } else {
+        alert("Hymn sync checked. Your local collection is up to date.");
+      }
+    } catch (err: any) {
+      console.warn("Failed to sync hymns:", err);
+      alert("Hymn sync check completed (using offline collection).");
+    } finally {
+      setIsSyncingHymns(false);
+    }
   };
 
   const syncOfflineDevotionals = async () => {
@@ -686,29 +864,40 @@ export default function RootLayout() {
     setDevotionalPref: handleSetDevotionalPref,
     activeDevotionalCategory,
     setActiveDevotionalCategory: handleSetActiveDevotionalCategory,
+    offlineHymns,
+    syncOfflineHymns,
+    isSyncingHymns,
+    hymnBookmarks,
+    toggleHymnBookmark,
+    language,
+    setLanguage: handleSetLanguage,
+    t: (key: string) => getTranslation(key, language),
+    checkAppUpdate: handleCheckAppUpdate,
+    updateInfo,
   };
 
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider value={isDark ? CustomDarkTheme : CustomLightTheme}>
-          {showSplash ? (
-            <AppProvider value={contextValue}>
+          <AppProvider value={contextValue}>
+            {showSplash ? (
               <PeacefulSplashScreen />
-            </AppProvider>
-          ) : !hasLaunched ? (
-            <AppProvider value={contextValue}>
+            ) : !hasLaunched ? (
               <Onboarding onFinish={() => handleSetHasLaunched(true)} />
-            </AppProvider>
-          ) : (
-            <AppProvider value={contextValue}>
+            ) : (
               <View
                 className={`flex-1 ${isDark ? "dark bg-[#121212]" : "bg-[#FDFBF7]"}`}
               >
                 <AppTabs />
               </View>
-            </AppProvider>
-          )}
+            )}
+            <UpdateModal
+              visible={updateModalVisible}
+              updateInfo={updateInfo}
+              onDismiss={handleDismissUpdate}
+            />
+          </AppProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

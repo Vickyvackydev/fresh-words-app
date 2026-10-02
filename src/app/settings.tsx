@@ -31,6 +31,16 @@ try {
   console.warn("Failed to load expo-notifications:", e);
 }
 
+const SUPPORTED_LANGUAGES = [
+  { code: "en", name: "English", nativeName: "English", flag: "🇬🇧" },
+  { code: "fr", name: "French", nativeName: "Français", flag: "🇫🇷" },
+  { code: "es", name: "Spanish", nativeName: "Español", flag: "🇪🇸" },
+  { code: "yo", name: "Yoruba", nativeName: "Èdè Yorùbá", flag: "🇳🇬" },
+  { code: "ig", name: "Igbo", nativeName: "Asụsụ Igbo", flag: "🇳🇬" },
+  { code: "ha", name: "Hausa", nativeName: "Harshen Hausa", flag: "🇳🇬" },
+  { code: "pt", name: "Portuguese", nativeName: "Português", flag: "🇵🇹" },
+];
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const {
@@ -52,7 +62,19 @@ export default function SettingsScreen() {
     setDevotionalPref,
     activeDevotionalCategory,
     setActiveDevotionalCategory,
+    offlineHymns,
+    syncOfflineHymns,
+    isSyncingHymns,
+    language,
+    setLanguage,
+    t,
+    checkAppUpdate,
   } = useApp();
+
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const selectedLangObj =
+    SUPPORTED_LANGUAGES.find((l) => l.code === (language || "en")) ||
+    SUPPORTED_LANGUAGES[0];
 
   // Settings modals
   const [feedbackVisible, setFeedbackVisible] = useState(false);
@@ -89,6 +111,14 @@ export default function SettingsScreen() {
       await syncOfflineDevotionals();
     } catch (e) {
       alert("Failed to sync devotionals: " + (e as any).message);
+    }
+  };
+
+  const triggerHymnSync = async () => {
+    try {
+      await syncOfflineHymns();
+    } catch (e) {
+      alert("Failed to sync hymns: " + (e as any).message);
     }
   };
 
@@ -152,6 +182,13 @@ export default function SettingsScreen() {
     }
   };
 
+  const totalCachedDevos = offlineDevotionals
+    ? Object.values(offlineDevotionals).reduce(
+        (acc: number, arr: any) => acc + (Array.isArray(arr) ? arr.length : 0),
+        0
+      )
+    : 0;
+
   return (
     <SafeAreaView
       edges={["left", "right", "top"]}
@@ -168,12 +205,12 @@ export default function SettingsScreen() {
       >
         {/* Header */}
         <Text className="text-2xl font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6] mb-8">
-          Settings
+          {t("settings")}
         </Text>
 
         {/* Section 1: Appearance */}
         <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
-          Appearance
+          {t("appearance")}
         </Text>
         <View
           className={`bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6`}
@@ -182,10 +219,10 @@ export default function SettingsScreen() {
           <View className="flex-row justify-between items-center">
             <View className="flex-1 mr-4">
               <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                Your Name
+                {t("yourName")}
               </Text>
               <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                Used for in-app greetings
+                {t("yourNameDesc")}
               </Text>
             </View>
             <TextInput
@@ -211,10 +248,10 @@ export default function SettingsScreen() {
           <View className="flex-row justify-between items-center">
             <View>
               <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                Dark Theme
+                {t("darkTheme")}
               </Text>
               <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                Activate dark mode
+                {t("darkThemeDesc")}
               </Text>
             </View>
             <Switch
@@ -232,7 +269,7 @@ export default function SettingsScreen() {
           <View className="flex-row justify-between items-center">
             <View>
               <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                Reader Font Size
+                {t("readerFontSize")}
               </Text>
               <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
                 Default size: {fontSize}px
@@ -257,20 +294,49 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
           </View>
+
+          {/* Divider */}
+          <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135]" />
+
+          {/* Language Selection */}
+          <Pressable
+            onPress={() => setLanguageModalVisible(true)}
+            className="flex-row justify-between items-center active:opacity-70"
+          >
+            <View className="flex-1 mr-3">
+              <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                {t("appLanguage")}
+              </Text>
+              <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
+                {t("appLanguageDesc")}
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-x-2 bg-[#FAF8F5] dark:bg-[#252527] px-3 py-1.5 rounded-xl border border-[#E0E1E6] dark:border-[#3E4249]">
+              <Text className="text-sm">{selectedLangObj.flag}</Text>
+              <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA]">
+                {selectedLangObj.nativeName}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={13}
+                color={isDark ? "#60A5FA" : "#1E40AF"}
+              />
+            </View>
+          </Pressable>
         </View>
 
         {/* Section 2: Notifications */}
         <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
-          Reminders
+          {t("reminders")}
         </Text>
         <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6">
           <View className="flex-row justify-between items-center">
             <View>
               <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                Enable Notifications
+                {t("enableNotifications")}
               </Text>
               <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                Receive morning devotions
+                {t("receiveMorningDevotions")}
               </Text>
             </View>
             <Switch
@@ -289,10 +355,10 @@ export default function SettingsScreen() {
               >
                 <View>
                   <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                    Reminder Time
+                    {t("reminderTime")}
                   </Text>
                   <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                    Current scheduled hour
+                    {t("currentScheduledHour")}
                   </Text>
                 </View>
                 <View className="px-3.5 py-1.5 bg-[#FAF8F5] dark:bg-[#2E3135] rounded-xl border border-[#E0E1E6] dark:border-[#3E4249]">
@@ -307,29 +373,33 @@ export default function SettingsScreen() {
 
         {/* Section 2b: Devotionals */}
         <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
-          Primary Devotional (Reader & Reminders)
+          {t("primaryDevotional")}
         </Text>
         <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6">
           {[
             {
               id: "daily_deliverance",
               category: "Daily Deliverance",
-              desc: "Receive daily deliverance series",
+              name: t("dailyDeliverance"),
+              desc: t("dailyDeliveranceDesc"),
             },
             {
               id: "holiness",
               category: "Holiness",
-              desc: "Receive daily holiness devotionals",
+              name: t("holiness"),
+              desc: t("holinessDesc"),
             },
             {
               id: "prayer",
               category: "Prayer",
-              desc: "Receive daily prayer & intercession",
+              name: t("prayer"),
+              desc: t("prayerDesc"),
             },
             {
               id: "yearly_devotional",
               category: "Yearly Devotional",
-              desc: "Receive full annual devotional package",
+              name: t("yearlyDevotional"),
+              desc: t("yearlyDevotionalDesc"),
             },
           ].map((item, index) => {
             const adminEnabled = appSettings
@@ -350,11 +420,11 @@ export default function SettingsScreen() {
                   <View className="flex-1 mr-4">
                     <View className="flex-row items-center gap-x-2">
                       <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                        {item.category}
+                        {item.name}
                       </Text>
                       {isSelected && (
                         <Text className="text-[10px] font-bold text-[#1E40AF] dark:text-[#60A5FA] bg-[#EEF2FF] dark:bg-[#1A1F36] px-2 py-0.5 rounded-full">
-                          Default
+                          {t("default")}
                         </Text>
                       )}
                     </View>
@@ -381,24 +451,24 @@ export default function SettingsScreen() {
 
         {/* Section 3: Offline Storage */}
         <Text className="text-xs font-bold tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
-          Offline Storage
+          {t("offlineStorage")}
         </Text>
         <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 gap-y-4 mb-6">
           <View className="flex-row justify-between items-center">
             <View className="flex-1 mr-4">
               <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-                Offline Devotional Cache
+                {t("offlineDevotionalCache")}
               </Text>
               {isSyncing ? (
                 <View className="flex-row items-center gap-x-2 mt-2">
                   <ActivityIndicator size="small" color="#1E40AF" />
                   <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                    Synchronizing devotionals...
+                    {t("synchronizingDevotionals")}
                   </Text>
                 </View>
               ) : (
                 <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mt-0.5">
-                  All active packages cached offline
+                  {totalCachedDevos} {t("devotionalsCachedCount")}
                 </Text>
               )}
             </View>
@@ -408,7 +478,38 @@ export default function SettingsScreen() {
               className={`py-1.5 px-3 rounded-lg active:opacity-75 ${isSyncing ? "bg-transparent" : "bg-[#E0E1E6] dark:bg-[#2E3135]"}`}
             >
               <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA]">
-                {isSyncing ? "Syncing..." : "Re-sync"}
+                {isSyncing ? t("syncing") : t("resync")}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135]" />
+
+          <View className="flex-row justify-between items-center">
+            <View className="flex-1 mr-4">
+              <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                {t("offlineHymnalCache")}
+              </Text>
+              {isSyncingHymns ? (
+                <View className="flex-row items-center gap-x-2 mt-2">
+                  <ActivityIndicator size="small" color="#1E40AF" />
+                  <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
+                    {t("synchronizingHymns")}
+                  </Text>
+                </View>
+              ) : (
+                <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mt-0.5">
+                  {offlineHymns?.length || 0} {t("hymnsAvailableOffline")}
+                </Text>
+              )}
+            </View>
+            <Pressable
+              onPress={triggerHymnSync}
+              disabled={isSyncingHymns}
+              className={`py-1.5 px-3 rounded-lg active:opacity-75 ${isSyncingHymns ? "bg-transparent" : "bg-[#E0E1E6] dark:bg-[#2E3135]"}`}
+            >
+              <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA]">
+                {isSyncingHymns ? t("syncing") : t("resync")}
               </Text>
             </Pressable>
           </View>
@@ -416,7 +517,7 @@ export default function SettingsScreen() {
 
         {/* Section 4: Support & Actions */}
         <Text className="text-xs font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-3">
-          Support
+          {t("support")}
         </Text>
         <View className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-3xl p-5 mb-8">
           {/* Feedback */}
@@ -425,7 +526,7 @@ export default function SettingsScreen() {
             className="flex-row justify-between items-center py-2 active:opacity-60"
           >
             <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-              Send Feedback
+              {t("sendFeedback")}
             </Text>
             <Ionicons
               name="chatbox-ellipses-outline"
@@ -442,7 +543,7 @@ export default function SettingsScreen() {
             className="flex-row justify-between items-center py-2 active:opacity-60"
           >
             <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-              Rate the App
+              {t("rateTheApp")}
             </Text>
             <Ionicons
               name="star-outline"
@@ -459,12 +560,34 @@ export default function SettingsScreen() {
             className="flex-row justify-between items-center py-2 active:opacity-60"
           >
             <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
-              About Fresh Devotionals
+              {t("aboutFreshDevotionals")}
             </Text>
             <Ionicons
               name="information-circle-outline"
               size={16}
               color={isDark ? "#B0B4BA" : "#60646C"}
+            />
+          </Pressable>
+
+          <View className="h-px bg-[#E0E1E6] dark:bg-[#2E3135] my-3" />
+
+          {/* Check for Updates */}
+          <Pressable
+            onPress={() => checkAppUpdate(true)}
+            className="flex-row justify-between items-center py-2 active:opacity-60"
+          >
+            <View>
+              <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6]">
+                {t("checkForUpdates")}
+              </Text>
+              <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] mt-0.5">
+                {t("version")} 1.0.3
+              </Text>
+            </View>
+            <Ionicons
+              name="cloud-download-outline"
+              size={18}
+              color={isDark ? "#60A5FA" : "#1E40AF"}
             />
           </Pressable>
         </View>
@@ -479,7 +602,7 @@ export default function SettingsScreen() {
           >
             <View className="flex-row justify-between items-center mb-2">
               <Text className="text-xl font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
-                Send Feedback
+                {t("sendFeedback")}
               </Text>
               <Pressable onPress={() => setFeedbackVisible(false)}>
                 <Ionicons
@@ -494,10 +617,10 @@ export default function SettingsScreen() {
               <View className="items-center py-10">
                 <Ionicons name="checkmark-circle" size={56} color="#10B981" />
                 <Text className="text-lg font-bold text-[#1C1917] dark:text-[#F3F4F6] mt-4 font-serif">
-                  Thank You
+                  {t("thankYou")}
                 </Text>
                 <Text className="text-sm text-[#60646C] dark:text-[#B0B4BA] mt-2">
-                  Your feedback has been sent.
+                  {t("feedbackSent")}
                 </Text>
               </View>
             ) : (
@@ -505,7 +628,7 @@ export default function SettingsScreen() {
                 <TextInput
                   value={feedbackEmail}
                   onChangeText={setFeedbackEmail}
-                  placeholder="Email (optional)"
+                  placeholder={t("emailOptional")}
                   placeholderTextColor={isDark ? "#B0B4BA" : "#60646C"}
                   keyboardType="email-address"
                   className="bg-[#FAF8F5] dark:bg-[#2E3135] h-12 rounded-xl px-4 text-[#1C1917] dark:text-[#F3F4F6] border border-[#E0E1E6] dark:border-[#3E4249] mb-5"
@@ -513,7 +636,7 @@ export default function SettingsScreen() {
                 <TextInput
                   value={feedbackMessage}
                   onChangeText={setFeedbackMessage}
-                  placeholder="Your message..."
+                  placeholder={t("yourMessagePlaceholder")}
                   placeholderTextColor={isDark ? "#B0B4BA" : "#60646C"}
                   multiline={true}
                   className="bg-[#FAF8F5] dark:bg-[#2E3135] h-32 rounded-xl p-4 text-[#1C1917] dark:text-[#F3F4F6] border border-[#E0E1E6] dark:border-[#3E4249] text-left"
@@ -528,7 +651,7 @@ export default function SettingsScreen() {
                     <ActivityIndicator size="small" color="white" />
                   ) : (
                     <Text className="text-white text-sm font-semibold">
-                      Submit Feedback
+                      {t("submitFeedback")}
                     </Text>
                   )}
                 </Pressable>
@@ -550,17 +673,17 @@ export default function SettingsScreen() {
               />
             </View>
             <Text className="text-xl font-bold text-center text-[#1C1917] dark:text-[#F3F4F6] mb-2 font-serif">
-              Love the App?
+              {t("loveTheApp")}
             </Text>
             <Text className="text-sm text-center leading-5 text-[#60646C] dark:text-[#B0B4BA] mb-6">
-              Your ratings help us spread encouraging messages around the world.
+              {t("rateTheAppPrompt")}
             </Text>
             <Pressable
               onPress={handleRateApp}
               className="w-full bg-[#1E40AF] dark:bg-[#2563EB] h-12 rounded-xl items-center justify-center active:opacity-90 mb-3"
             >
               <Text className="text-white text-sm font-semibold">
-                Rate on Store
+                {t("rateNowAppStore")}
               </Text>
             </Pressable>
             <Pressable
@@ -568,7 +691,7 @@ export default function SettingsScreen() {
               className="w-full h-11 rounded-xl items-center justify-center active:bg-[#F3EFE6] dark:active:bg-[#2E3135]"
             >
               <Text className="text-sm font-medium text-[#60646C] dark:text-[#B0B4BA]">
-                Later
+                {t("maybeLater")}
               </Text>
             </Pressable>
           </View>
@@ -803,6 +926,90 @@ export default function SettingsScreen() {
                   Confirm
                 </Text>
               </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* E. Language Selection Modal */}
+      <Modal
+        visible={languageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setLanguageModalVisible(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-center items-center px-6">
+          <View className="bg-[#FDFBF7] dark:bg-[#1E1E1E] border border-[#E0E1E6] dark:border-[#2E3135] w-full max-w-sm rounded-3xl p-6 shadow-2xl">
+            <View className="flex-row justify-between items-center mb-4">
+              <View>
+                <Text className="text-lg font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
+                  {t("selectLanguage")}
+                </Text>
+                <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
+                  {t("selectLanguageSub")}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setLanguageModalVisible(false)}
+                className="w-8 h-8 rounded-full bg-[#FAF8F5] dark:bg-[#2A2A30] items-center justify-center active:scale-95"
+              >
+                <Ionicons
+                  name="close"
+                  size={18}
+                  color={isDark ? "#F3F4F6" : "#1C1917"}
+                />
+              </Pressable>
+            </View>
+
+            <ScrollView className="max-h-80 my-2" showsVerticalScrollIndicator={false}>
+              {SUPPORTED_LANGUAGES.map((item) => {
+                const isSelected = (language || "en") === item.code;
+                return (
+                  <Pressable
+                    key={item.code}
+                    onPress={() => {
+                      setLanguage(item.code);
+                      setLanguageModalVisible(false);
+                    }}
+                    className={`flex-row items-center justify-between p-3.5 rounded-2xl mb-2 border transition-all active:scale-[0.98] ${
+                      isSelected
+                        ? "bg-[#EEF2FF] dark:bg-[#1E293B] border-[#1E40AF] dark:border-[#3B82F6]"
+                        : "bg-white dark:bg-[#252528] border-[#E0E1E6] dark:border-[#2E3135]"
+                    }`}
+                  >
+                    <View className="flex-row items-center gap-3">
+                      <Text className="text-2xl">{item.flag}</Text>
+                      <View>
+                        <Text
+                          className={`text-sm font-bold ${
+                            isSelected
+                              ? "text-[#1E40AF] dark:text-[#60A5FA]"
+                              : "text-[#1C1917] dark:text-[#F3F4F6]"
+                          }`}
+                        >
+                          {item.nativeName}
+                        </Text>
+                        <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
+                          {item.name}
+                        </Text>
+                      </View>
+                    </View>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color={isDark ? "#60A5FA" : "#1E40AF"}
+                      />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <View className="mt-3 pt-3 border-t border-[#E0E1E6] dark:border-[#2E3135]">
+              <Text className="text-[11px] text-[#60646C] dark:text-[#B0B4BA] text-center leading-4">
+                Devotionals and hymns will display in {selectedLangObj.name} when translations are available.
+              </Text>
             </View>
           </View>
         </View>

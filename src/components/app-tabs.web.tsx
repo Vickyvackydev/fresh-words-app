@@ -72,6 +72,18 @@ export default function AppTabs() {
         }}
       />
       <Tabs.Screen
+        name="hymns"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="hymn/[id]"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           href: null,

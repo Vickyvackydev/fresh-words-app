@@ -3,6 +3,7 @@ import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Clipboard,
   FlatList,
@@ -17,6 +18,9 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getBaseUrl } from "../api/client";
+import { getLocalizedBookName } from "../utils/bibleTranslations";
 // Lazy-loaded BIBLE_RAW_DATA to prevent app startup memory overload and crash
 import { BibleBook, BibleVerse } from "../db/mockDb";
 
@@ -118,7 +122,7 @@ export function getFullBible(): BibleBook[] {
 export default function BibleScreen() {
   const FULL_BIBLE = getFullBible();
   const insets = useSafeAreaInsets();
-  const { isDark, fontSize } = useApp();
+  const { isDark, fontSize, language, t } = useApp();
 
   const { book, chapter, verse } = useLocalSearchParams<{
     book?: string;
@@ -136,6 +140,75 @@ export default function BibleScreen() {
   const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [selectedVerseNum, setSelectedVerseNum] = useState<number | null>(null);
+
+  // Translation state for the current chapter
+  const [translatedVerses, setTranslatedVerses] = useState<Record<number, string>>({});
+  const [isTranslatingChapter, setIsTranslatingChapter] = useState(false);
+
+  useEffect(() => {
+    if (!selectedBook || selectedChapter === null || !language || language === "en") {
+      setTranslatedVerses({});
+      setIsTranslatingChapter(false);
+      return;
+    }
+
+    const currentChap = selectedBook.chapters.find((c) => c.chapter === selectedChapter);
+    if (!currentChap || !currentChap.verses.length) return;
+
+    let isMounted = true;
+    const cacheKey = `bible_trans_${selectedBook.name}_${selectedChapter}_${language}`;
+
+    // Check local AsyncStorage cache first
+    AsyncStorage.getItem(cacheKey)
+      .then((cached) => {
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (isMounted) {
+              setTranslatedVerses(parsed);
+              setIsTranslatingChapter(false);
+            }
+            return null;
+          } catch (e) {}
+        }
+        // If not cached, fetch from backend translation endpoint
+        if (isMounted) setIsTranslatingChapter(true);
+        const baseUrl = getBaseUrl();
+        const rawVerses = currentChap.verses.map((v) => v.text);
+        return fetch(`${baseUrl}/translate/bible`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book: selectedBook.name,
+            chapter: selectedChapter,
+            verses: rawVerses,
+            language: language,
+          }),
+        });
+      })
+      .then((res) => (res ? res.json() : null))
+      .then((json) => {
+        if (!isMounted || !json) return;
+        if (json.success && json.data && Array.isArray(json.data.verses)) {
+          const verseMap: Record<number, string> = {};
+          json.data.verses.forEach((vText: string, idx: number) => {
+            verseMap[idx + 1] = vText;
+          });
+          setTranslatedVerses(verseMap);
+          AsyncStorage.setItem(cacheKey, JSON.stringify(verseMap)).catch(() => {});
+        }
+      })
+      .catch((err) => {
+        console.warn("Bible chapter translation deferred:", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsTranslatingChapter(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedBook?.name, selectedChapter, language]);
 
   // Deep linking parameter handler
   useEffect(() => {
@@ -286,7 +359,8 @@ export default function BibleScreen() {
 
   const copyVerse = () => {
     if (selectedVerse && selectedBook && selectedChapter) {
-      const formatted = `"${selectedVerse.text}" — ${selectedBook.name} ${selectedChapter}:${selectedVerse.verse}`;
+      const bookName = getLocalizedBookName(selectedBook.name, language);
+      const formatted = `"${selectedVerse.text}" — ${bookName} ${selectedChapter}:${selectedVerse.verse}`;
       Clipboard.setString(formatted);
       closeBottomSheet();
     }
@@ -294,7 +368,8 @@ export default function BibleScreen() {
 
   const shareVerse = () => {
     if (selectedVerse && selectedBook && selectedChapter) {
-      const formatted = `"${selectedVerse.text}" — ${selectedBook.name} ${selectedChapter}:${selectedVerse.verse}`;
+      const bookName = getLocalizedBookName(selectedBook.name, language);
+      const formatted = `"${selectedVerse.text}" — ${bookName} ${selectedChapter}:${selectedVerse.verse}`;
       Share.share({ message: formatted });
       closeBottomSheet();
     }
@@ -363,10 +438,13 @@ export default function BibleScreen() {
     (c) => c.chapter === selectedChapter,
   );
 
-  // Filter book list
-  const filteredBooks = FULL_BIBLE.filter((b) =>
-    b.name.toLowerCase().includes(bookSearchQuery.toLowerCase()),
-  );
+  // Filter book list with localized and English names
+  const filteredBooks = FULL_BIBLE.filter((b) => {
+    const locName = getLocalizedBookName(b.name, language).toLowerCase();
+    const engName = b.name.toLowerCase();
+    const query = bookSearchQuery.toLowerCase().trim();
+    return locName.includes(query) || engName.includes(query);
+  });
 
   return (
     <SafeAreaView
@@ -391,7 +469,7 @@ export default function BibleScreen() {
                   : "text-[#60646C] dark:text-[#B0B4BA]"
               }`}
             >
-              Books
+              {t("bibleBooks")}
             </Text>
           </Pressable>
           <Pressable
@@ -409,7 +487,7 @@ export default function BibleScreen() {
                   : "text-[#60646C] dark:text-[#B0B4BA]"
               }`}
             >
-              Keyword Search
+              {t("keywordSearch")}
             </Text>
           </Pressable>
         </View>
@@ -427,7 +505,7 @@ export default function BibleScreen() {
             <TextInput
               value={keywordSearchQuery}
               onChangeText={handleKeywordSearch}
-              placeholder="Search keyword in all scriptures..."
+              placeholder={t("searchScripturesPlaceholder")}
               placeholderTextColor={isDark ? "#B0B4BA" : "#60646C"}
               className="flex-1 h-full py-0 mb-2 text-sm text-[#1C1917] dark:text-[#F3F4F6] font-sans"
               autoCorrect={false}
@@ -496,11 +574,11 @@ export default function BibleScreen() {
           >
             <View>
               <Text className="text-sm font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
-                Continue Reading: {continueReading.book}{" "}
+                {t("continueReading")}: {getLocalizedBookName(continueReading.book, language)}{" "}
                 {continueReading.chapter}
               </Text>
               <Text className="text-[11px] text-[#60646C] dark:text-[#B0B4BA] mt-0.5">
-                Resume from your last visited chapter
+                {t("resumeLastChapter") || "Resume from your last visited chapter"}
               </Text>
             </View>
             <Ionicons
@@ -520,7 +598,7 @@ export default function BibleScreen() {
             <TextInput
               value={bookSearchQuery}
               onChangeText={setBookSearchQuery}
-              placeholder="Search book name..."
+              placeholder={t("searchBookPlaceholder")}
               placeholderTextColor={isDark ? "#B0B4BA" : "#60646C"}
               className="flex-1 h-full py-0 mb-2 text-sm text-[#1C1917] dark:text-[#F3F4F6] font-sans"
               autoCorrect={false}
@@ -542,32 +620,42 @@ export default function BibleScreen() {
             keyExtractor={(item) => item.name}
             contentContainerStyle={{ paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => {
-                  setSelectedBook(item);
-                  setViewMode("chapters");
-                }}
-                className="flex-row justify-between items-center bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] px-4 py-3 rounded-xl mb-2.5 active:bg-[#F3EFE6] dark:active:bg-[#252525]"
-              >
-                <View className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-full bg-[#EEF2FF] dark:bg-[#1A1F36] items-center justify-center mr-3">
-                    <Text className="text-[10px] font-bold text-[#1E40AF] dark:text-[#60A5FA]">
-                      {item.testament === "Old" ? "OT" : "NT"}
-                    </Text>
+            renderItem={({ item }) => {
+              const localizedName = getLocalizedBookName(item.name, language);
+              return (
+                <Pressable
+                  onPress={() => {
+                    setSelectedBook(item);
+                    setViewMode("chapters");
+                  }}
+                  className="flex-row justify-between items-center bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] px-4 py-3 rounded-xl mb-2.5 active:bg-[#F3EFE6] dark:active:bg-[#252525]"
+                >
+                  <View className="flex-row items-center">
+                    <View className="w-8 h-8 rounded-full bg-[#EEF2FF] dark:bg-[#1A1F36] items-center justify-center mr-3">
+                      <Text className="text-[10px] font-bold text-[#1E40AF] dark:text-[#60A5FA]">
+                        {item.testament === "Old" ? "OT" : "NT"}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text className="text-sm font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
+                        {localizedName}
+                      </Text>
+                      {language !== "en" && localizedName !== item.name && (
+                        <Text className="text-[10px] text-[#60646C] dark:text-[#B0B4BA]">
+                          {item.name}
+                        </Text>
+                      )}
+                    </View>
                   </View>
-                  <Text className="text-sm font-bold text-[#1C1917] dark:text-[#F3F4F6] font-serif">
-                    {item.name}
-                  </Text>
-                </View>
-                <View className="flex-row items-center">
-                  <Text className="text-[11px] text-[#60646C] dark:text-[#B0B4BA] mr-2">
-                    {item.chapters.length} Chapters
-                  </Text>
-                  <Ionicons name="chevron-forward" size={14} color="#B0B4BA" />
-                </View>
-              </Pressable>
-            )}
+                  <View className="flex-row items-center">
+                    <Text className="text-[11px] text-[#60646C] dark:text-[#B0B4BA] mr-2">
+                      {item.chapters.length} {t("chapters")}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={14} color="#B0B4BA" />
+                  </View>
+                </Pressable>
+              );
+            }}
           />
         </View>
       )}
@@ -590,11 +678,11 @@ export default function BibleScreen() {
                 color={isDark ? "#60A5FA" : "#1E40AF"}
               />
               <Text className="text-sm font-semibold text-[#1E40AF] dark:text-[#60A5FA] ml-1">
-                Books
+                {t("bibleBooks")}
               </Text>
             </Pressable>
             <Text className="text-lg font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
-              {selectedBook.name}
+              {getLocalizedBookName(selectedBook.name, language)}
             </Text>
             <View className="w-12" />
           </View>
@@ -641,11 +729,11 @@ export default function BibleScreen() {
                 color={isDark ? "#60A5FA" : "#1E40AF"}
               />
               <Text className="text-sm font-semibold text-[#1E40AF] dark:text-[#60A5FA] ml-1">
-                Chapters
+                {t("chapters")}
               </Text>
             </Pressable>
             <Text className="text-lg font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
-              {selectedBook.name} {selectedChapter}
+              {getLocalizedBookName(selectedBook.name, language)} {selectedChapter}
             </Text>
             <View className="w-12" />
           </View>
@@ -704,11 +792,11 @@ export default function BibleScreen() {
                   color={isDark ? "#F3F4F6" : "#1C1917"}
                 />
                 <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6] ml-1.5">
-                  Verses
+                  {t("verses")}
                 </Text>
               </Pressable>
               <Text className="text-lg font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
-                {selectedBook.name} {selectedChapter}
+                {getLocalizedBookName(selectedBook.name, language)} {selectedChapter}
               </Text>
               <Pressable
                 onPress={() => {
@@ -720,10 +808,20 @@ export default function BibleScreen() {
                 className="active:opacity-60"
               >
                 <Text className="text-sm font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
-                  Library
+                  {t("bibleBooks")}
                 </Text>
               </Pressable>
             </View>
+
+            {/* Translation loading banner */}
+            {isTranslatingChapter && (
+              <View className="flex-row items-center justify-center py-2 px-4 bg-[#EEF2FF] dark:bg-[#1E293B] mx-6 mt-3 rounded-xl gap-x-2">
+                <ActivityIndicator size="small" color="#1E40AF" />
+                <Text className="text-xs font-semibold text-[#1E40AF] dark:text-[#60A5FA]">
+                  {t("translatingChapter")}
+                </Text>
+              </View>
+            )}
 
             <ScrollView
               ref={readerScrollViewRef}
@@ -739,6 +837,7 @@ export default function BibleScreen() {
                   const key = `${selectedBook.name}-${selectedChapter}-${v.verse}`;
                   const highlightColor = highlightedVerses[key];
                   const isTarget = selectedVerseNum === v.verse;
+                  const verseText = translatedVerses[v.verse] || v.text;
                   return (
                     <Pressable
                       key={v.verse}
@@ -752,7 +851,7 @@ export default function BibleScreen() {
                           });
                         }
                       }}
-                      onPress={() => handleVersePress(v)}
+                      onPress={() => handleVersePress({ ...v, text: verseText })}
                       className="py-2 px-2.5 rounded-xl active:bg-[#F3EFE6] dark:active:bg-[#1E1E1E]"
                       style={{
                         backgroundColor:
@@ -774,7 +873,7 @@ export default function BibleScreen() {
                           {v.verse}
                           {"   "}
                         </Text>
-                        {v.text}
+                        {verseText}
                       </Text>
                     </Pressable>
                   );
@@ -793,7 +892,7 @@ export default function BibleScreen() {
                     color={isDark ? "#60A5FA" : "#1E40AF"}
                   />
                   <Text className="text-sm font-semibold text-[#1E40AF] dark:text-[#60A5FA] ml-1">
-                    Prev Chapter
+                    {t("backToChapters") || "Prev Chapter"}
                   </Text>
                 </Pressable>
 
@@ -802,7 +901,7 @@ export default function BibleScreen() {
                   className="flex-row items-center py-2 active:opacity-60"
                 >
                   <Text className="text-sm font-semibold text-[#1E40AF] dark:text-[#60A5FA] mr-1">
-                    Next Chapter
+                    {t("next") || "Next Chapter"}
                   </Text>
                   <Ionicons
                     name="chevron-forward"
@@ -834,7 +933,7 @@ export default function BibleScreen() {
                   {/* Verse summary */}
                   <View className="mb-2">
                     <Text className="text-[10px] font-bold uppercase tracking-wider text-[#60646C] dark:text-[#B0B4BA] mb-1">
-                      Selected Verse • {selectedBook.name} {selectedChapter}:
+                      {t("verse")} • {getLocalizedBookName(selectedBook.name, language)} {selectedChapter}:
                       {selectedVerse.verse}
                     </Text>
                     <Text className="text-sm italic text-[#1C1917] dark:text-[#F3F4F6] font-serif">
@@ -845,7 +944,7 @@ export default function BibleScreen() {
                   {/* Highlight Colors Row */}
                   <View className="flex-row items-center justify-between border-b border-[#E0E1E6] dark:border-[#2E3135] pb-4">
                     <Text className="text-xs font-bold text-[#60646C] dark:text-[#B0B4BA]">
-                      Highlight Color
+                      {t("highlight")}
                     </Text>
                     <View className="flex-row gap-x-2">
                       {["#FEF3C7", "#DCFCE7", "#DBEAFE", "#FCE7F3"].map(
@@ -884,7 +983,7 @@ export default function BibleScreen() {
                         className="mr-2"
                       />
                       <Text className="text-sm font-semibold text-[#1C1917] dark:text-[#F3F4F6] ml-2">
-                        Copy
+                        {t("copyVerse")}
                       </Text>
                     </Pressable>
 
@@ -899,7 +998,7 @@ export default function BibleScreen() {
                         className="mr-2"
                       />
                       <Text className="text-sm font-semibold text-white ml-2">
-                        Share
+                        {t("shareVerse")}
                       </Text>
                     </Pressable>
                   </View>

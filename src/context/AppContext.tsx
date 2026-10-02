@@ -1,3 +1,4 @@
+import { Hymn } from "@/db/hymns";
 import { createContext, useContext } from "react";
 
 export interface AppContextType {
@@ -32,6 +33,16 @@ export interface AppContextType {
   setDevotionalPref: (category: string, enabled: boolean) => void;
   activeDevotionalCategory: string;
   setActiveDevotionalCategory: (category: string) => void;
+  offlineHymns: Hymn[];
+  syncOfflineHymns: () => Promise<void>;
+  isSyncingHymns: boolean;
+  hymnBookmarks: number[];
+  toggleHymnBookmark: (hymnNumber: number) => void;
+  language: string;
+  setLanguage: (lang: string) => void;
+  t: (key: string) => string;
+  checkAppUpdate: (manualTrigger?: boolean) => void;
+  updateInfo: any;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

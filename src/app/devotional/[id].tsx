@@ -12,6 +12,7 @@ import { useApp } from "@/context/AppContext";
 import { getBaseUrl } from "@/api/client";
 import { Devotional } from "@/db/mockDb";
 import DevotionReader from "@/components/devotion-reader";
+import { parseActionPoints } from "@/utils/safeParse";
 
 export default function DeepLinkedDevotionalScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,14 +42,7 @@ export default function DeepLinkedDevotionalScreen() {
             : [],
       prayer: raw.prayer || "",
       reflection: raw.reflection || "",
-      actionPoints:
-        typeof raw.action_points === "string"
-          ? (raw.action_points.trim().startsWith("[")
-              ? JSON.parse(raw.action_points || "[]")
-              : [raw.action_points])
-          : Array.isArray(raw.actionPoints)
-            ? raw.actionPoints
-            : [],
+      actionPoints: parseActionPoints(raw.action_points || raw.actionPoints),
     };
   };
 
