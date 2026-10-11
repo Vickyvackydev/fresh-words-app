@@ -596,8 +596,13 @@ export default function HymnsScreen() {
                 >
                   <View className="flex-row items-center flex-1 mr-2">
                     {/* Hymn Number Badge */}
-                    <View className="w-8 h-8 rounded-xl bg-[#F0EEEA] dark:bg-[#24242A] border border-[#E5E2DC] dark:border-[#32323A] items-center justify-center mr-3 shrink-0">
-                      <Text className="text-xs font-bold text-[#44403C] dark:text-[#D6D3D1]">
+                    <View className="min-w-[44px] h-8 px-1.5 rounded-xl bg-[#F0EEEA] dark:bg-[#24242A] border border-[#E5E2DC] dark:border-[#32323A] items-center justify-center mr-3 shrink-0">
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit={true}
+                        minimumFontScale={0.7}
+                        className="text-xs font-bold text-[#44403C] dark:text-[#D6D3D1] text-center"
+                      >
                         {item.number}
                       </Text>
                     </View>
@@ -780,8 +785,13 @@ export default function HymnsScreen() {
               return (
                 <View className="flex-row items-start mb-6">
                   {/* Stanza Number Badge */}
-                  <View className="w-7 h-7 rounded-lg bg-[#F0EEEA] dark:bg-[#24242A] border border-[#E5E2DC] dark:border-[#32323A] items-center justify-center mr-3 mt-1 shrink-0">
-                    <Text className="text-xs font-bold text-[#44403C] dark:text-[#D6D3D1]">
+                  <View className="min-w-[28px] h-7 px-1 rounded-lg bg-[#F0EEEA] dark:bg-[#24242A] border border-[#E5E2DC] dark:border-[#32323A] items-center justify-center mr-3 mt-1 shrink-0">
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.7}
+                      className="text-xs font-bold text-[#44403C] dark:text-[#D6D3D1] text-center"
+                    >
                       {item.number}
                     </Text>
                   </View>

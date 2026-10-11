@@ -211,6 +211,8 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     openInPlayStore: "Update on Google Play",
     openInAppStore: "Update on App Store",
     whatsNew: "What's New in This Version",
+    readInBible: "Read in Bible",
+    tapToReadInBible: "Tap to read in Bible",
   },
   fr: {
     // Navigation & Tabs
@@ -422,6 +424,8 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     openInPlayStore: "Mettre à jour sur Google Play",
     openInAppStore: "Mettre à jour sur l'App Store",
     whatsNew: "Nouveautés de cette version",
+    readInBible: "Lire dans la Bible",
+    tapToReadInBible: "Appuyez pour lire dans la Bible",
   },
   es: {
     // Navigation & Tabs
@@ -633,6 +637,8 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     openInPlayStore: "Actualizar en Google Play",
     openInAppStore: "Actualizar en App Store",
     whatsNew: "Novedades de esta versión",
+    readInBible: "Leer en la Biblia",
+    tapToReadInBible: "Toca para leer en la Biblia",
   },
   yo: {
     // Navigation & Tabs
@@ -844,6 +850,8 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     openInPlayStore: "Ṣe Ìmúdàgba lórí Google Play",
     openInAppStore: "Ṣe Ìmúdàgba lórí App Store",
     whatsNew: "Kí ló titun nínú ẹ̀yà yìí",
+    readInBible: "Kà ninu Bíbélì",
+    tapToReadInBible: "Tẹ lati kà ninu Bíbélì",
   },
   ig: {
     // Navigation & Tabs
@@ -1055,6 +1063,8 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     openInPlayStore: "Mmelite na Google Play",
     openInAppStore: "Mmelite na App Store",
     whatsNew: "Ihe dị ọhụrụ na ụdị a",
+    readInBible: "Gụọ na Baịbụl",
+    tapToReadInBible: "Pịa ka ị gụọ na Baịbụl",
   },
   ha: {
     // Navigation & Tabs
@@ -1266,6 +1276,8 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     openInPlayStore: "Sabunta a Google Play",
     openInAppStore: "Sabunta a App Store",
     whatsNew: "Abubuwan da ke sabo a wannan sigar",
+    readInBible: "Karanta a Littafi Mai Tsarki",
+    tapToReadInBible: "Taɓa don karantawa a Littafi Mai Tsarki",
   },
   pt: {
     // Navigation & Tabs
@@ -1477,6 +1489,8 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     openInPlayStore: "Atualizar no Google Play",
     openInAppStore: "Atualizar na App Store",
     whatsNew: "O que há de novo nesta versão",
+    readInBible: "Ler na Bíblia",
+    tapToReadInBible: "Toque para ler na Bíblia",
   },
 };
 

@@ -21,6 +21,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getBaseUrl } from "../api/client";
 import { getLocalizedBookName } from "../utils/bibleTranslations";
+import { resolveStandardBookName } from "../utils/parseScripture";
 // Lazy-loaded BIBLE_RAW_DATA to prevent app startup memory overload and crash
 import { BibleBook, BibleVerse } from "../db/mockDb";
 
@@ -213,14 +214,22 @@ export default function BibleScreen() {
   // Deep linking parameter handler
   useEffect(() => {
     if (book) {
-      const cleanBookParam = book.trim().toLowerCase();
-      const matchedBook = FULL_BIBLE.find(
-        (b) =>
-          b.name.toLowerCase() === cleanBookParam ||
-          b.name.toLowerCase().replace(/\s+/g, "") === cleanBookParam.replace(/\s+/g, "") ||
-          b.name.toLowerCase().includes(cleanBookParam) ||
-          cleanBookParam.includes(b.name.toLowerCase())
-      );
+      const standardName = resolveStandardBookName(book);
+      const cleanBookParam = standardName.trim().toLowerCase();
+
+      // Prioritize exact match over partial match to avoid collisions (e.g., "1 John" vs "John")
+      const matchedBook =
+        FULL_BIBLE.find(
+          (b) =>
+            b.name.toLowerCase() === cleanBookParam ||
+            b.name.toLowerCase().replace(/\s+/g, "") === cleanBookParam.replace(/\s+/g, "")
+        ) ||
+        FULL_BIBLE.find(
+          (b) =>
+            b.name.toLowerCase().startsWith(cleanBookParam) ||
+            cleanBookParam.startsWith(b.name.toLowerCase()) ||
+            b.name.toLowerCase().includes(cleanBookParam)
+        );
 
       if (matchedBook) {
         setSelectedBook(matchedBook);
@@ -233,10 +242,12 @@ export default function BibleScreen() {
 
         if (verse) {
           const parsedVerse = parseInt(verse, 10);
-          if (!isNaN(parsedVerse)) {
-            setSelectedVerseNum(parsedVerse);
-          }
+          setSelectedVerseNum(!isNaN(parsedVerse) && parsedVerse > 0 ? parsedVerse : null);
+        } else {
+          setSelectedVerseNum(null);
         }
+
+        setContinueReading({ book: matchedBook.name, chapter: validChapter });
         setViewMode("reader");
         setActiveTab("books");
       }

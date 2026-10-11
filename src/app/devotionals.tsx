@@ -415,8 +415,13 @@ export default function DevotionalsScreen() {
                   className="bg-white dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] px-4 py-3.5 rounded-2xl mb-2.5 flex-row justify-between items-center active:bg-[#F3EFE6] dark:active:bg-[#252525] shadow-xs"
                 >
                   <View className="flex-row items-center flex-1 mr-3">
-                    <View className="w-10 h-10 rounded-xl bg-[#EEF2FF] dark:bg-[#1A1F36] items-center justify-center mr-3">
-                      <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA]">
+                    <View className="min-w-[42px] h-10 px-1.5 rounded-xl bg-[#EEF2FF] dark:bg-[#1A1F36] items-center justify-center mr-3 shrink-0">
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit={true}
+                        minimumFontScale={0.7}
+                        className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA] text-center"
+                      >
                         {item.default_day}
                       </Text>
                     </View>

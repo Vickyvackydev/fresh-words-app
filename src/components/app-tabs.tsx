@@ -19,9 +19,14 @@ export default function AppTabs() {
           paddingBottom: 8,
           paddingTop: 8,
         },
+        tabBarAllowFontScaling: false,
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "500",
+          fontSize: 10,
+          fontWeight: "600",
+          letterSpacing: -0.2,
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 0,
         },
       }}
     >

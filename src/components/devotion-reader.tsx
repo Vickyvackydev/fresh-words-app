@@ -17,6 +17,8 @@ import { getBaseUrl } from "../api/client";
 import { Devotional } from "../db/mockDb";
 import { shareDevotional } from "@/utils/shareDevotional";
 import { parseActionPoints } from "@/utils/safeParse";
+import { useRouter } from "expo-router";
+import { parseScriptureReference } from "@/utils/parseScripture";
 
 interface DevotionReaderProps {
   devotional: Devotional | null;
@@ -40,6 +42,7 @@ export default function DevotionReader({
   onPrev,
 }: DevotionReaderProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { isDark, fontSize, setFontSize, saveProgress, language, t } = useApp();
   const [showControls, setShowControls] = useState<boolean>(false);
   const [checkedActions, setCheckedActions] = useState<Record<string, boolean>>(
@@ -184,6 +187,38 @@ export default function DevotionReader({
       ...prev,
       [key]: !prev[key],
     }));
+  };
+
+  const handleOpenScriptureInBible = () => {
+    // 1. Try to parse from translated or original scripture reference
+    const refToParse =
+      devotional.scriptureRef ||
+      rawDevotional?.scriptureRef ||
+      (rawDevotional as any)?.scripture_reference ||
+      "";
+
+    const parsed = parseScriptureReference(refToParse);
+
+    // 2. Dismiss devotional reader modal
+    onClose();
+
+    // 3. Navigate to Bible screen with specific book, chapter, and verse
+    if (parsed) {
+      setTimeout(() => {
+        router.navigate({
+          pathname: "/bible",
+          params: {
+            book: parsed.book,
+            chapter: String(parsed.chapter),
+            verse: parsed.verse ? String(parsed.verse) : undefined,
+          },
+        });
+      }, 60);
+    } else {
+      setTimeout(() => {
+        router.navigate("/bible" as any);
+      }, 60);
+    }
   };
 
   const displayDateLabel =
@@ -338,13 +373,37 @@ export default function DevotionReader({
             {devotional.title}
           </Text>
 
-          {/* Scripture Quote Box */}
-          <View className="bg-[#F5F2EA] dark:bg-[#1A1A1A] p-5 rounded-2xl mb-8 border-l-4 border-[#1E40AF]">
-            <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA] mb-2 uppercase tracking-wide">
-              {devotional.scriptureRef}
-            </Text>
+          {/* Scripture Quote Box (Clickable to jump directly to Bible screen) */}
+          <Pressable
+            onPress={handleOpenScriptureInBible}
+            className="bg-[#F5F2EA] dark:bg-[#1A1A1A] p-5 rounded-2xl mb-8 border-l-4 border-[#1E40AF] active:opacity-75 active:scale-[0.99]"
+            accessibilityRole="button"
+            accessibilityLabel={`${devotional.scriptureRef}. ${t("tapToReadInBible")}`}
+            accessibilityHint={t("tapToReadInBible")}
+          >
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-xs font-bold text-[#1E40AF] dark:text-[#60A5FA] uppercase tracking-wide flex-1 mr-2">
+                {devotional.scriptureRef}
+              </Text>
+              <View className="flex-row items-center bg-[#DBEAFE] dark:bg-[#1E3A8A]/60 px-2.5 py-1 rounded-full">
+                <Ionicons
+                  name="book-outline"
+                  size={12}
+                  color={isDark ? "#93C5FD" : "#1E40AF"}
+                />
+                <Text className="text-[10px] font-bold text-[#1E40AF] dark:text-[#93C5FD] ml-1">
+                  {t("readInBible")}
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={10}
+                  color={isDark ? "#93C5FD" : "#1E40AF"}
+                  className="ml-0.5"
+                />
+              </View>
+            </View>
             <Text
-              className={`italic text-[#2C2A29] dark:text-[#E5E7EB] leading-relaxed`}
+              className="italic text-[#2C2A29] dark:text-[#E5E7EB] leading-relaxed"
               style={{
                 fontSize: fontSize - 1,
                 lineHeight: (fontSize - 1) * 1.5,
@@ -352,7 +411,10 @@ export default function DevotionReader({
             >
               "{devotional.scriptureText}"
             </Text>
-          </View>
+            <Text className="text-[10px] font-medium text-[#60646C] dark:text-[#9CA3AF] mt-2.5">
+              {t("tapToReadInBible")}
+            </Text>
+          </Pressable>
 
           {/* Body Paragraphs */}
           <View className="space-y-6 mb-10">
