@@ -8,6 +8,8 @@ import { getBaseUrl } from "@/api/client";
 import {
   ActivityIndicator,
   FlatList,
+  InteractionManager,
+  Platform,
   Pressable,
   Share,
   StatusBar,
@@ -111,45 +113,50 @@ export default function HymnsScreen() {
   }, [activeHymnalBook, localEnglishHymns, localYorubaHymns]);
 
   const handleSwitchBook = (book: "english" | "yoruba") => {
-    setActiveHymnalBook(book);
-    setSelectedCategory("All");
-    setSearchQuery("");
-    setKeywordQuery("");
+    // 1. Immediately dismiss modal so animation glides smoothly at 60fps
     setOptionsModalVisible(false);
-    if (viewMode === "reader") {
-      setViewMode("list");
-      setSelectedHymn(null);
-    }
-    AsyncStorage.setItem("activeHymnalBook", book).catch(() => {});
 
-    // Instant local data change with background fetch fallback if cache is empty
-    if (book === "yoruba" && localYorubaHymns.length === 0) {
-      setIsLoadingBook(true);
-      const baseUrl = getBaseUrl();
-      fetch(`${baseUrl}/hymns/all?book=yoruba`)
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            setLocalYorubaHymns(json.data);
-            AsyncStorage.setItem("offlineHymns_yo", JSON.stringify(json.data)).catch(() => {});
-          }
-        })
-        .catch((err) => console.warn("Could not fetch Yoruba hymns:", err))
-        .finally(() => setIsLoadingBook(false));
-    } else if (book === "english" && localEnglishHymns.length === 0) {
-      setIsLoadingBook(true);
-      const baseUrl = getBaseUrl();
-      fetch(`${baseUrl}/hymns/all?book=english`)
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            setLocalEnglishHymns(json.data);
-            AsyncStorage.setItem("offlineHymns", JSON.stringify(json.data)).catch(() => {});
-          }
-        })
-        .catch((err) => console.warn("Could not fetch English hymns:", err))
-        .finally(() => setIsLoadingBook(false));
-    }
+    // 2. Run data switch right after slide animation completes
+    InteractionManager.runAfterInteractions(() => {
+      setActiveHymnalBook(book);
+      setSelectedCategory("All");
+      setSearchQuery("");
+      setKeywordQuery("");
+      if (viewMode === "reader") {
+        setViewMode("list");
+        setSelectedHymn(null);
+      }
+      AsyncStorage.setItem("activeHymnalBook", book).catch(() => {});
+
+      // Instant local data change with background fetch fallback if cache is empty
+      if (book === "yoruba" && localYorubaHymns.length === 0) {
+        setIsLoadingBook(true);
+        const baseUrl = getBaseUrl();
+        fetch(`${baseUrl}/hymns/all?book=yoruba`)
+          .then((res) => res.json())
+          .then((json) => {
+            if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+              setLocalYorubaHymns(json.data);
+              AsyncStorage.setItem("offlineHymns_yo", JSON.stringify(json.data)).catch(() => {});
+            }
+          })
+          .catch((err) => console.warn("Could not fetch Yoruba hymns:", err))
+          .finally(() => setIsLoadingBook(false));
+      } else if (book === "english" && localEnglishHymns.length === 0) {
+        setIsLoadingBook(true);
+        const baseUrl = getBaseUrl();
+        fetch(`${baseUrl}/hymns/all?book=english`)
+          .then((res) => res.json())
+          .then((json) => {
+            if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+              setLocalEnglishHymns(json.data);
+              AsyncStorage.setItem("offlineHymns", JSON.stringify(json.data)).catch(() => {});
+            }
+          })
+          .catch((err) => console.warn("Could not fetch English hymns:", err))
+          .finally(() => setIsLoadingBook(false));
+      }
+    });
   };
 
   const activeHymnBookmarks = useMemo(() => {
@@ -215,25 +222,25 @@ export default function HymnsScreen() {
   // Continue reading/singing cache
   const [lastVisitedHymnNumber, setLastVisitedHymnNumber] = useState<number>(1);
 
-  // Collect unique categories
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    currentHymns.forEach((h) => {
-      if (h.category) set.add(h.category.trim());
-    });
-    return ["All", ...Array.from(set).sort()];
-  }, [currentHymns]);
-
-  // Count hymns per category
-  const categoryCounts = useMemo(() => {
+  // Collect unique categories and count in a single pass
+  const { categories, categoryCounts } = useMemo(() => {
     const counts: Record<string, number> = { All: currentHymns.length };
-    currentHymns.forEach((h) => {
-      if (h.category) {
-        const cat = h.category.trim();
-        counts[cat] = (counts[cat] || 0) + 1;
+    const set = new Set<string>();
+    const len = currentHymns.length;
+    for (let i = 0; i < len; i++) {
+      const cat = currentHymns[i].category;
+      if (cat) {
+        const trimmed = cat.trim();
+        if (trimmed) {
+          set.add(trimmed);
+          counts[trimmed] = (counts[trimmed] || 0) + 1;
+        }
       }
-    });
-    return counts;
+    }
+    return {
+      categories: ["All", ...Array.from(set).sort()],
+      categoryCounts: counts,
+    };
   }, [currentHymns]);
 
   // Filtered Hymns List
@@ -664,6 +671,11 @@ export default function HymnsScreen() {
             keyExtractor={(item) => item.id || `hymn-${item.number}`}
             contentContainerStyle={{ paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
+            initialNumToRender={15}
+            maxToRenderPerBatch={15}
+            windowSize={7}
+            updateCellsBatchingPeriod={40}
+            removeClippedSubviews={Platform.OS === "android"}
             ListEmptyComponent={() => (
               <View className="mt-10 items-center px-6">
                 <Ionicons
