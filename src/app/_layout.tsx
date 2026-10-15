@@ -12,7 +12,7 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import * as Updates from "expo-updates";
 import { useColorScheme as useNativeWindColorScheme } from "nativewind";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import {
   SafeAreaProvider,
@@ -150,8 +150,11 @@ export default function RootLayout() {
     Record<string, any[]>
   >({});
   const [offlineHymns, setOfflineHymns] = useState<any[]>(MOCK_HYMNS);
+  const [offlineHymnsYo, setOfflineHymnsYo] = useState<any[]>([]);
+  const [activeHymnalBook, setActiveHymnalBook] = useState<"english" | "yoruba">("english");
   const [isSyncingHymns, setIsSyncingHymns] = useState(false);
   const [hymnBookmarks, setHymnBookmarks] = useState<number[]>([]);
+  const [hymnBookmarksYo, setHymnBookmarksYo] = useState<number[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [tappedDevotional, setTappedDevotional] = useState<any | null>(null);
   const [userName, setUserNameState] = useState("");
@@ -208,6 +211,11 @@ export default function RootLayout() {
   const handleSetLanguage = async (lang: string) => {
     setLanguageState(lang);
     await safeStorage.setItem("language", lang);
+
+    if (lang === "yo") {
+      setActiveHymnalBook("yoruba");
+      safeStorage.setItem("activeHymnalBook", "yoruba");
+    }
   };
 
   const handleSetUserName = async (name: string) => {
@@ -398,7 +406,10 @@ export default function RootLayout() {
           "appSettings",
           "offlineDevotionals",
           "offlineHymns",
+          "offlineHymns_yo",
+          "activeHymnalBook",
           "hymnBookmarks",
+          "hymnBookmarks_yo",
           "userName",
           "devotionalPrefs",
           "defaultDevotionalCategory",
@@ -438,7 +449,7 @@ export default function RootLayout() {
         if (storeMap.userName) setUserNameState(storeMap.userName);
         if (storeMap.language) setLanguageState(storeMap.language);
 
-        // Load offline hymns
+        // Load English hymns
         if (storeMap.offlineHymns) {
           const cachedHymns = safeJsonParse(storeMap.offlineHymns, []);
           if (Array.isArray(cachedHymns) && cachedHymns.length > 0) {
@@ -450,9 +461,32 @@ export default function RootLayout() {
           setOfflineHymns(MOCK_HYMNS);
         }
 
+        // Load Yoruba hymns
+        if (storeMap.offlineHymns_yo) {
+          const cachedYo = safeJsonParse(storeMap.offlineHymns_yo, []);
+          if (Array.isArray(cachedYo) && cachedYo.length > 0) {
+            const sanitizedYo = cachedYo.map((h: any) => ({
+              ...h,
+              author: h.author ? h.author.replace(/Christ Apostolic Church\s*(\(CAC\))?\s*(Worldwide)?/gi, "Ìwé Orin Mímọ́").replace(/\bCAC\b(\s*Worldwide)?/gi, "Ìwé Orin Mímọ́") : h.author,
+              category: h.category ? h.category.replace(/\bCAC\b/gi, "Mímọ́").replace(/Christ Apostolic Church/gi, "Orin Mímọ́") : h.category,
+            }));
+            setOfflineHymnsYo(sanitizedYo);
+          }
+        }
+
+        // Active hymnal book selection
+        if (storeMap.activeHymnalBook === "yoruba" || storeMap.activeHymnalBook === "english") {
+          setActiveHymnalBook(storeMap.activeHymnalBook);
+        } else if (storeMap.language === "yo") {
+          setActiveHymnalBook("yoruba");
+        }
+
         // Load hymn bookmarks
         if (storeMap.hymnBookmarks) {
           setHymnBookmarks(safeJsonParse(storeMap.hymnBookmarks, []));
+        }
+        if (storeMap.hymnBookmarks_yo) {
+          setHymnBookmarksYo(safeJsonParse(storeMap.hymnBookmarks_yo, []));
         }
 
         let storedDark = storeMap.isDark;
@@ -630,18 +664,31 @@ export default function RootLayout() {
           console.log("[Offline Mode] Using local bookmarks.");
         }
 
-        // 4. Sync Hymns silently
+        // 4. Sync English and Yoruba Hymns silently & independently
         try {
           const baseUrl = getBaseUrl();
-          const response = await fetchWithTimeout(`${baseUrl}/hymns/all`, 3500);
-          const json = await response.json();
-          if (
-            json.success &&
-            Array.isArray(json.data) &&
-            json.data.length > 0
-          ) {
-            setOfflineHymns(json.data);
-            safeStorage.setItem("offlineHymns", JSON.stringify(json.data));
+          // Sync English Hymnal
+          try {
+            const resEn = await fetchWithTimeout(`${baseUrl}/hymns/all?book=english`, 4500);
+            const jsonEn = await resEn.json();
+            if (jsonEn.success && Array.isArray(jsonEn.data) && jsonEn.data.length > 0) {
+              setOfflineHymns(jsonEn.data);
+              safeStorage.setItem("offlineHymns", JSON.stringify(jsonEn.data));
+            }
+          } catch {
+            // English hymns fallback to cache
+          }
+
+          // Sync Yoruba Hymnal (Ìwé Orin Mímọ́)
+          try {
+            const resYo = await fetchWithTimeout(`${baseUrl}/hymns/all?book=yoruba`, 4500);
+            const jsonYo = await resYo.json();
+            if (jsonYo.success && Array.isArray(jsonYo.data) && jsonYo.data.length > 0) {
+              setOfflineHymnsYo(jsonYo.data);
+              safeStorage.setItem("offlineHymns_yo", JSON.stringify(jsonYo.data));
+            }
+          } catch {
+            // Yoruba hymns fallback to cache
           }
         } catch {
           console.log("[Offline Mode] Using local hymn collection.");
@@ -693,21 +740,38 @@ export default function RootLayout() {
     saveStorageItem("fontSize", val);
   };
 
-  const toggleHymnBookmark = (hymnNumber: number) => {
-    setHymnBookmarks((prev) => {
-      const updated = prev.includes(hymnNumber)
-        ? prev.filter((n) => n !== hymnNumber)
-        : [...prev, hymnNumber];
-      safeStorage.setItem("hymnBookmarks", JSON.stringify(updated));
-      return updated;
-    });
+  const handleSetActiveHymnalBook = async (book: "english" | "yoruba") => {
+    setActiveHymnalBook(book);
+    await safeStorage.setItem("activeHymnalBook", book);
   };
 
-  const syncOfflineHymns = async () => {
+  const toggleHymnBookmark = (hymnNumber: number, targetBook?: "english" | "yoruba") => {
+    const book = targetBook || activeHymnalBook;
+    if (book === "yoruba") {
+      setHymnBookmarksYo((prev) => {
+        const updated = prev.includes(hymnNumber)
+          ? prev.filter((n) => n !== hymnNumber)
+          : [...prev, hymnNumber];
+        safeStorage.setItem("hymnBookmarks_yo", JSON.stringify(updated));
+        return updated;
+      });
+    } else {
+      setHymnBookmarks((prev) => {
+        const updated = prev.includes(hymnNumber)
+          ? prev.filter((n) => n !== hymnNumber)
+          : [...prev, hymnNumber];
+        safeStorage.setItem("hymnBookmarks", JSON.stringify(updated));
+        return updated;
+      });
+    }
+  };
+
+  const syncOfflineHymns = async (targetBook?: "english" | "yoruba") => {
     setIsSyncingHymns(true);
     try {
       const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/hymns/all`);
+      const bookToSync = targetBook || activeHymnalBook;
+      const res = await fetch(`${baseUrl}/hymns/all?book=${bookToSync}`);
       const json = await res.json();
       if (
         res.ok &&
@@ -715,11 +779,19 @@ export default function RootLayout() {
         Array.isArray(json.data) &&
         json.data.length > 0
       ) {
-        setOfflineHymns(json.data);
-        await safeStorage.setItem("offlineHymns", JSON.stringify(json.data));
-        alert(
-          `Successfully synced ${json.data.length} hymns for offline reading!`,
-        );
+        if (bookToSync === "yoruba") {
+          setOfflineHymnsYo(json.data);
+          await safeStorage.setItem("offlineHymns_yo", JSON.stringify(json.data));
+          alert(
+            `Successfully synced ${json.data.length} Yoruba hymns (Ìwé Orin Mímọ́) for offline reading!`,
+          );
+        } else {
+          setOfflineHymns(json.data);
+          await safeStorage.setItem("offlineHymns", JSON.stringify(json.data));
+          alert(
+            `Successfully synced ${json.data.length} English hymns for offline reading!`,
+          );
+        }
       } else {
         alert("Hymn sync checked. Your local collection is up to date.");
       }
@@ -828,11 +900,7 @@ export default function RootLayout() {
     });
   };
 
-  if (loading || !fontsLoaded) {
-    return null;
-  }
-
-  const contextValue = {
+  const contextValue = useMemo(() => ({
     isDark,
     setIsDark: handleSetIsDark,
     hasLaunched,
@@ -865,16 +933,51 @@ export default function RootLayout() {
     activeDevotionalCategory,
     setActiveDevotionalCategory: handleSetActiveDevotionalCategory,
     offlineHymns,
+    offlineHymnsYo,
+    activeHymnalBook,
+    setActiveHymnalBook: handleSetActiveHymnalBook,
     syncOfflineHymns,
     isSyncingHymns,
     hymnBookmarks,
+    hymnBookmarksYo,
+    activeHymnBookmarks: activeHymnalBook === "yoruba" ? hymnBookmarksYo : hymnBookmarks,
     toggleHymnBookmark,
     language,
     setLanguage: handleSetLanguage,
     t: (key: string) => getTranslation(key, language),
     checkAppUpdate: handleCheckAppUpdate,
     updateInfo,
-  };
+  }), [
+    isDark,
+    hasLaunched,
+    permissionPromptDone,
+    bookmarks,
+    readingProgress,
+    notificationsEnabled,
+    notificationTime,
+    fontSize,
+    feedbackSubmitted,
+    appSettings,
+    deviceId,
+    offlineDevotionals,
+    isSyncing,
+    userName,
+    tappedDevotional,
+    devotionalPrefs,
+    activeDevotionalCategory,
+    offlineHymns,
+    offlineHymnsYo,
+    activeHymnalBook,
+    isSyncingHymns,
+    hymnBookmarks,
+    hymnBookmarksYo,
+    language,
+    updateInfo,
+  ]);
+
+  if (loading || !fontsLoaded) {
+    return null;
+  }
 
   return (
     <SafeAreaProvider>
@@ -889,7 +992,7 @@ export default function RootLayout() {
               <View
                 className={`flex-1 ${isDark ? "dark bg-[#121212]" : "bg-[#FDFBF7]"}`}
               >
-                <AppTabs />
+                <AppTabs isDark={isDark} language={language} />
               </View>
             )}
             <UpdateModal

@@ -3,8 +3,21 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 
-export default function AppTabs() {
-  const { isDark } = useApp();
+interface AppTabsProps {
+  isDark?: boolean;
+  language?: string;
+}
+
+export default React.memo(function AppTabs({ isDark: propIsDark }: AppTabsProps) {
+  let isDark = propIsDark;
+  if (isDark === undefined) {
+    try {
+      const app = useApp();
+      isDark = app.isDark;
+    } catch {
+      isDark = false;
+    }
+  }
   
   return (
     <Tabs
@@ -103,4 +116,4 @@ export default function AppTabs() {
       />
     </Tabs>
   );
-}
+});

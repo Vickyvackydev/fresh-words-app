@@ -50,15 +50,22 @@ interface StanzaItem {
 
 export default function HymnReaderScreen() {
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, book } = useLocalSearchParams<{ id: string; book?: string }>();
   const {
     isDark,
     offlineHymns,
+    offlineHymnsYo,
+    activeHymnalBook,
     hymnBookmarks,
+    hymnBookmarksYo,
     toggleHymnBookmark,
     language,
     t,
   } = useApp();
+
+  const currentBook = (book as "english" | "yoruba") || activeHymnalBook;
+  const currentHymns = currentBook === "yoruba" ? offlineHymnsYo : offlineHymns;
+  const currentBookmarks = currentBook === "yoruba" ? hymnBookmarksYo : hymnBookmarks;
 
   const [jumpModalVisible, setJumpModalVisible] = useState(false);
   const [jumpNumber, setJumpNumber] = useState("");
@@ -70,17 +77,17 @@ export default function HymnReaderScreen() {
   // Find the current hymn
   const hymn = useMemo<Hymn | undefined>(() => {
     return (
-      offlineHymns.find((h) => h.number === currentHymnNumber) ||
-      offlineHymns[0]
+      currentHymns.find((h) => h.number === currentHymnNumber) ||
+      currentHymns[0]
     );
-  }, [offlineHymns, currentHymnNumber]);
+  }, [currentHymns, currentHymnNumber]);
 
   // Dynamic multi-language translation state
   const [translatedHymn, setTranslatedHymn] = useState<Hymn | null>(null);
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!language || language === "en" || !hymn) {
+    if (!language || language === "en" || !hymn || currentBook === "yoruba") {
       setTranslatedHymn(null);
       setIsTranslating(false);
       return;
@@ -106,32 +113,32 @@ export default function HymnReaderScreen() {
     return () => {
       isMounted = false;
     };
-  }, [hymn?.number, language]);
+  }, [hymn?.number, language, currentBook]);
 
   const activeHymn = translatedHymn || hymn;
 
   // Find previous and next hymns
   const prevHymn = useMemo(() => {
-    const sorted = [...offlineHymns].sort((a, b) => a.number - b.number);
+    const sorted = [...currentHymns].sort((a, b) => a.number - b.number);
     const currentIndex = sorted.findIndex((h) => h.number === hymn?.number);
     return currentIndex > 0 ? sorted[currentIndex - 1] : null;
-  }, [offlineHymns, hymn]);
+  }, [currentHymns, hymn]);
 
   const nextHymn = useMemo(() => {
-    const sorted = [...offlineHymns].sort((a, b) => a.number - b.number);
+    const sorted = [...currentHymns].sort((a, b) => a.number - b.number);
     const currentIndex = sorted.findIndex((h) => h.number === hymn?.number);
     return currentIndex >= 0 && currentIndex < sorted.length - 1
       ? sorted[currentIndex + 1]
       : null;
-  }, [offlineHymns, hymn]);
+  }, [currentHymns, hymn]);
 
-  const isBookmarked = hymn ? hymnBookmarks.includes(hymn.number) : false;
+  const isBookmarked = hymn ? currentBookmarks.includes(hymn.number) : false;
 
   // Navigate to another hymn
   const navigateToHymn = (num: number) => {
     router.replace({
       pathname: "/hymn/[id]",
-      params: { id: num.toString() },
+      params: { id: num.toString(), book: currentBook },
     });
   };
 
@@ -250,7 +257,7 @@ export default function HymnReaderScreen() {
         <View className="flex-row items-center gap-x-2">
           {/* Bookmark Button */}
           <Pressable
-            onPress={() => toggleHymnBookmark(hymn.number)}
+            onPress={() => toggleHymnBookmark(hymn.number, currentBook)}
             hitSlop={10}
             className="w-9 h-9 rounded-full bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] items-center justify-center active:opacity-70"
           >
@@ -288,9 +295,27 @@ export default function HymnReaderScreen() {
               <View className="flex-row items-center justify-center py-2 px-4 mb-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 gap-x-2 w-full">
                 <ActivityIndicator size="small" color={isDark ? "#60A5FA" : "#1E40AF"} />
                 <Text className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                  {t("translatingContent")}
+                  {language === "yo" ? t("loadingYorubaHymn") : t("translatingContent")}
                 </Text>
               </View>
+            )}
+
+            {currentBook === "yoruba" ? (
+              <View className="flex-row items-center py-1 px-3.5 mb-3 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 gap-x-1.5">
+                <Ionicons name="book-outline" size={13} color={isDark ? "#34D399" : "#059669"} />
+                <Text className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                  Ìwé Orin Mímọ́ (Yorùbá)
+                </Text>
+              </View>
+            ) : (
+              language === "yo" && !isTranslating && !(activeHymn.is_translated || (translatedHymn && (translatedHymn.title !== hymn?.title || translatedHymn.verses !== hymn?.verses))) && (
+                <View className="flex-row items-center py-2 px-3 mb-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 gap-x-2 w-full">
+                  <Ionicons name="information-circle-outline" size={16} color={isDark ? "#FBBF24" : "#D97706"} />
+                  <Text className="text-xs text-amber-800 dark:text-amber-200 flex-1 leading-relaxed">
+                    {t("officialYorubaPending")}
+                  </Text>
+                </View>
+              )
             )}
 
             {/* Hymn Title */}
@@ -303,7 +328,7 @@ export default function HymnReaderScreen() {
               {activeHymn.author && (
                 <View className="bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] px-3 py-1 rounded-full">
                   <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                    {activeHymn.author}
+                    {activeHymn.author.replace(/Christ Apostolic Church\s*(\(CAC\))?\s*(Worldwide)?/gi, "Ìwé Orin Mímọ́").replace(/\bCAC\b(\s*Worldwide)?/gi, "Ìwé Orin Mímọ́")}
                   </Text>
                 </View>
               )}
@@ -317,7 +342,7 @@ export default function HymnReaderScreen() {
               {activeHymn.category && (
                 <View className="bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] px-3 py-1 rounded-full">
                   <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                    {activeHymn.category}
+                    {activeHymn.category.replace(/\bCAC\b/gi, "Mímọ́").replace(/Christ Apostolic Church/gi, "Orin Mímọ́")}
                   </Text>
                 </View>
               )}

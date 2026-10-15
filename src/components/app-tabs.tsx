@@ -1,9 +1,34 @@
 import { useApp } from "@/context/AppContext";
+import { getTranslation } from "../utils/i18n";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import React from "react";
 
-export default function AppTabs() {
-  const { isDark, t } = useApp();
+interface AppTabsProps {
+  isDark?: boolean;
+  language?: string;
+}
+
+export default React.memo(function AppTabs({
+  isDark: propIsDark,
+  language: propLanguage,
+}: AppTabsProps) {
+  let isDark = propIsDark;
+  let language = propLanguage;
+
+  // Fallback to useApp only if not passed as props
+  if (isDark === undefined || language === undefined) {
+    try {
+      const app = useApp();
+      if (isDark === undefined) isDark = app.isDark;
+      if (language === undefined) language = app.language;
+    } catch {
+      if (isDark === undefined) isDark = false;
+      if (language === undefined) language = "en";
+    }
+  }
+
+  const t = (key: string) => getTranslation(key, language || "en");
 
   return (
     <Tabs
@@ -128,4 +153,4 @@ export default function AppTabs() {
       />
     </Tabs>
   );
-}
+});

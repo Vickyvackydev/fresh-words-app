@@ -34,10 +34,15 @@ export interface AppContextType {
   activeDevotionalCategory: string;
   setActiveDevotionalCategory: (category: string) => void;
   offlineHymns: Hymn[];
-  syncOfflineHymns: () => Promise<void>;
+  offlineHymnsYo: Hymn[];
+  activeHymnalBook: "english" | "yoruba";
+  setActiveHymnalBook: (book: "english" | "yoruba") => void;
+  syncOfflineHymns: (book?: "english" | "yoruba") => Promise<void>;
   isSyncingHymns: boolean;
   hymnBookmarks: number[];
-  toggleHymnBookmark: (hymnNumber: number) => void;
+  hymnBookmarksYo: number[];
+  activeHymnBookmarks: number[];
+  toggleHymnBookmark: (hymnNumber: number, book?: "english" | "yoruba") => void;
   language: string;
   setLanguage: (lang: string) => void;
   t: (key: string) => string;

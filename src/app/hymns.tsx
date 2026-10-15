@@ -1,13 +1,13 @@
 import { useApp } from "@/context/AppContext";
 import { Hymn } from "@/db/hymns";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getBaseUrl } from "@/api/client";
 import {
   ActivityIndicator,
   FlatList,
-  Modal,
   Pressable,
   Share,
   StatusBar,
@@ -40,18 +40,121 @@ interface StanzaItem {
 
 export default function HymnsScreen() {
   const insets = useSafeAreaInsets();
-  const { id: routeId } = useLocalSearchParams<{ id?: string }>();
   const {
     isDark,
     fontSize,
     offlineHymns,
+    offlineHymnsYo,
     hymnBookmarks,
+    hymnBookmarksYo,
     toggleHymnBookmark,
     syncOfflineHymns,
     isSyncingHymns,
     language,
     t,
   } = useApp();
+
+  const [activeHymnalBook, setActiveHymnalBook] = useState<"english" | "yoruba">("english");
+  const [localYorubaHymns, setLocalYorubaHymns] = useState<Hymn[]>(offlineHymnsYo || []);
+  const [localEnglishHymns, setLocalEnglishHymns] = useState<Hymn[]>(offlineHymns || []);
+  const [isLoadingBook, setIsLoadingBook] = useState(false);
+
+  useEffect(() => {
+    if (offlineHymns && offlineHymns.length > 0) {
+      setLocalEnglishHymns(offlineHymns);
+    }
+  }, [offlineHymns]);
+
+  useEffect(() => {
+    if (offlineHymnsYo && offlineHymnsYo.length > 0) {
+      setLocalYorubaHymns(offlineHymnsYo);
+    }
+  }, [offlineHymnsYo]);
+
+  useEffect(() => {
+    AsyncStorage.getItem("activeHymnalBook")
+      .then((saved) => {
+        if (saved === "english" || saved === "yoruba") {
+          setActiveHymnalBook(saved);
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem("offlineHymns_yo")
+      .then((savedYo) => {
+        if (savedYo) {
+          try {
+            const parsed = JSON.parse(savedYo);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setLocalYorubaHymns(parsed);
+              return;
+            }
+          } catch {}
+        }
+        // Background preload from backend if not yet cached
+        const baseUrl = getBaseUrl();
+        fetch(`${baseUrl}/hymns/all?book=yoruba`)
+          .then((r) => r.json())
+          .then((json) => {
+            if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+              setLocalYorubaHymns(json.data);
+              AsyncStorage.setItem("offlineHymns_yo", JSON.stringify(json.data)).catch(() => {});
+            }
+          })
+          .catch(() => {});
+      })
+      .catch(() => {});
+  }, []);
+
+  const currentHymns = useMemo(() => {
+    return activeHymnalBook === "yoruba" ? localYorubaHymns : localEnglishHymns;
+  }, [activeHymnalBook, localEnglishHymns, localYorubaHymns]);
+
+  const handleSwitchBook = (book: "english" | "yoruba") => {
+    setActiveHymnalBook(book);
+    setSelectedCategory("All");
+    setSearchQuery("");
+    setKeywordQuery("");
+    setOptionsModalVisible(false);
+    if (viewMode === "reader") {
+      setViewMode("list");
+      setSelectedHymn(null);
+    }
+    AsyncStorage.setItem("activeHymnalBook", book).catch(() => {});
+
+    // Instant local data change with background fetch fallback if cache is empty
+    if (book === "yoruba" && localYorubaHymns.length === 0) {
+      setIsLoadingBook(true);
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/hymns/all?book=yoruba`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            setLocalYorubaHymns(json.data);
+            AsyncStorage.setItem("offlineHymns_yo", JSON.stringify(json.data)).catch(() => {});
+          }
+        })
+        .catch((err) => console.warn("Could not fetch Yoruba hymns:", err))
+        .finally(() => setIsLoadingBook(false));
+    } else if (book === "english" && localEnglishHymns.length === 0) {
+      setIsLoadingBook(true);
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/hymns/all?book=english`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            setLocalEnglishHymns(json.data);
+            AsyncStorage.setItem("offlineHymns", JSON.stringify(json.data)).catch(() => {});
+          }
+        })
+        .catch((err) => console.warn("Could not fetch English hymns:", err))
+        .finally(() => setIsLoadingBook(false));
+    }
+  };
+
+  const activeHymnBookmarks = useMemo(() => {
+    return activeHymnalBook === "yoruba" ? hymnBookmarksYo : hymnBookmarks;
+  }, [activeHymnalBook, hymnBookmarksYo, hymnBookmarks]);
 
   // Mode: 'hymns' | 'search' (matching Bible screen)
   const [activeTab, setActiveTab] = useState<"hymns" | "search">("hymns");
@@ -65,7 +168,7 @@ export default function HymnsScreen() {
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!language || language === "en" || !selectedHymn) {
+    if (!language || language === "en" || !selectedHymn || activeHymnalBook === "yoruba") {
       setTranslatedHymn(null);
       setIsTranslating(false);
       return;
@@ -91,7 +194,7 @@ export default function HymnsScreen() {
     return () => {
       isMounted = false;
     };
-  }, [selectedHymn?.number, language]);
+  }, [selectedHymn?.number, language, activeHymnalBook]);
 
   const activeHymn = translatedHymn || selectedHymn;
 
@@ -112,46 +215,31 @@ export default function HymnsScreen() {
   // Continue reading/singing cache
   const [lastVisitedHymnNumber, setLastVisitedHymnNumber] = useState<number>(1);
 
-  // Handle route param deep linking if present
-  useEffect(() => {
-    if (routeId) {
-      const parsed = parseInt(routeId, 10);
-      if (!isNaN(parsed)) {
-        const found = offlineHymns.find((h) => h.number === parsed);
-        if (found) {
-          setSelectedHymn(found);
-          setLastVisitedHymnNumber(found.number);
-          setViewMode("reader");
-        }
-      }
-    }
-  }, [routeId, offlineHymns]);
-
   // Collect unique categories
   const categories = useMemo(() => {
     const set = new Set<string>();
-    offlineHymns.forEach((h) => {
+    currentHymns.forEach((h) => {
       if (h.category) set.add(h.category.trim());
     });
     return ["All", ...Array.from(set).sort()];
-  }, [offlineHymns]);
+  }, [currentHymns]);
 
   // Count hymns per category
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: offlineHymns.length };
-    offlineHymns.forEach((h) => {
+    const counts: Record<string, number> = { All: currentHymns.length };
+    currentHymns.forEach((h) => {
       if (h.category) {
         const cat = h.category.trim();
         counts[cat] = (counts[cat] || 0) + 1;
       }
     });
     return counts;
-  }, [offlineHymns]);
+  }, [currentHymns]);
 
   // Filtered Hymns List
   const filteredHymns = useMemo(() => {
-    return offlineHymns.filter((hymn) => {
-      if (showBookmarksOnly && !hymnBookmarks.includes(hymn.number)) {
+    return currentHymns.filter((hymn) => {
+      if (showBookmarksOnly && !activeHymnBookmarks.includes(hymn.number)) {
         return false;
       }
       if (selectedCategory !== "All" && hymn.category !== selectedCategory) {
@@ -167,7 +255,7 @@ export default function HymnsScreen() {
       }
       return true;
     });
-  }, [offlineHymns, hymnBookmarks, showBookmarksOnly, selectedCategory, searchQuery]);
+  }, [currentHymns, activeHymnBookmarks, showBookmarksOnly, selectedCategory, searchQuery]);
 
   // Keyword Search across titles, choruses, and verses (matching Bible's keyword search)
   const keywordSearchResults = useMemo(() => {
@@ -179,7 +267,7 @@ export default function HymnsScreen() {
       matchedSnippet: string;
     }[] = [];
 
-    for (const hymn of offlineHymns) {
+    for (const hymn of currentHymns) {
       const verses = getVersesList(hymn.verses);
       let matched = false;
 
@@ -221,7 +309,7 @@ export default function HymnsScreen() {
     }
 
     return results;
-  }, [offlineHymns, keywordQuery]);
+  }, [currentHymns, keywordQuery]);
 
   // Stanza items for the reader FlatList
   const readerItems = useMemo<StanzaItem[]>(() => {
@@ -268,7 +356,7 @@ export default function HymnsScreen() {
   const handleJumpSubmit = () => {
     const num = parseInt(jumpNumber.trim(), 10);
     if (!isNaN(num) && num > 0) {
-      const found = offlineHymns.find((h) => h.number === num);
+      const found = currentHymns.find((h) => h.number === num);
       if (found) {
         setJumpModalVisible(false);
         setJumpNumber("");
@@ -277,7 +365,7 @@ export default function HymnsScreen() {
         // Fallback to first if not found
         setJumpModalVisible(false);
         setJumpNumber("");
-        const closest = offlineHymns[0];
+        const closest = currentHymns[0];
         if (closest) handleOpenHymn(closest);
       }
     }
@@ -285,7 +373,7 @@ export default function HymnsScreen() {
 
   const navigateHymn = (direction: "next" | "prev") => {
     if (!selectedHymn) return;
-    const sorted = [...offlineHymns].sort((a, b) => a.number - b.number);
+    const sorted = [...currentHymns].sort((a, b) => a.number - b.number);
     const currIdx = sorted.findIndex((h) => h.number === selectedHymn.number);
 
     if (direction === "next" && currIdx < sorted.length - 1) {
@@ -310,7 +398,7 @@ export default function HymnsScreen() {
         }
       });
 
-      content += `\nShared from Fresh Words Hymnal`;
+      content += `\nShared from Fresh Words Hymnal (${activeHymnalBook === "yoruba" ? "Ìwé Orin Mímọ́" : "English Hymnal"})`;
       await Share.share({
         message: content,
         title: `Hymn #${hymn.number} - ${hymn.title}`,
@@ -321,10 +409,10 @@ export default function HymnsScreen() {
   // Find last visited hymn
   const lastHymn = useMemo(() => {
     return (
-      offlineHymns.find((h) => h.number === lastVisitedHymnNumber) ||
-      offlineHymns[0]
+      currentHymns.find((h) => h.number === lastVisitedHymnNumber) ||
+      currentHymns[0]
     );
-  }, [offlineHymns, lastVisitedHymnNumber]);
+  }, [currentHymns, lastVisitedHymnNumber]);
 
   return (
     <SafeAreaView
@@ -341,7 +429,15 @@ export default function HymnsScreen() {
               if (viewMode === "reader") {
                 setViewMode("list");
               } else {
-                router.back();
+                try {
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.replace("/");
+                  }
+                } catch {
+                  router.replace("/");
+                }
               }
             }}
             hitSlop={12}
@@ -357,12 +453,14 @@ export default function HymnsScreen() {
             <Text className="text-xl font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
               {viewMode === "reader" && activeHymn
                 ? `${t("stanza")} #${activeHymn.number}`
+                : activeHymnalBook === "yoruba"
+                ? "Ìwé Orin Mímọ́"
                 : t("hymnalHeader")}
             </Text>
             <Text className="text-[11px] text-[#60646C] dark:text-[#B0B4BA]">
               {viewMode === "reader" && activeHymn
-                ? activeHymn.category || t("hymnal")
-                : `${offlineHymns.length} ${t("hymnsCountLabel")}`}
+                ? activeHymn.category || (activeHymnalBook === "yoruba" ? "Yorùbá Hymnal" : t("hymnal"))
+                : `${currentHymns.length} ${t("hymnsCountLabel")}`}
             </Text>
           </View>
         </View>
@@ -373,19 +471,19 @@ export default function HymnsScreen() {
             <>
               {/* Bookmark Toggle in Reader */}
               <Pressable
-                onPress={() => toggleHymnBookmark(activeHymn.number)}
+                onPress={() => toggleHymnBookmark(activeHymn.number, activeHymnalBook)}
                 hitSlop={10}
                 className="w-9 h-9 rounded-full bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] items-center justify-center active:opacity-70"
               >
                 <Ionicons
                   name={
-                    hymnBookmarks.includes(activeHymn.number)
+                    activeHymnBookmarks.includes(activeHymn.number)
                       ? "star"
                       : "star-outline"
                   }
                   size={18}
                   color={
-                    hymnBookmarks.includes(activeHymn.number)
+                    activeHymnBookmarks.includes(activeHymn.number)
                       ? "#D97706"
                       : isDark
                       ? "#B0B4BA"
@@ -408,30 +506,28 @@ export default function HymnsScreen() {
               </Pressable>
             </>
           ) : (
-            <>
-              {/* Single Popup Options Button */}
-              <Pressable
-                onPress={() => setOptionsModalVisible(true)}
-                hitSlop={10}
-                className="relative w-9 h-9 rounded-full bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] items-center justify-center active:opacity-70"
-              >
-                <Ionicons
-                  name="ellipsis-horizontal"
-                  size={18}
-                  color={isDark ? "#D1D5DB" : "#4B5563"}
-                />
-                {(showBookmarksOnly || selectedCategory !== "All") && (
-                  <View className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
-                )}
-              </Pressable>
-            </>
+            /* Three-dot Options Button (opens bottom slide sheet) */
+            <Pressable
+              onPress={() => setOptionsModalVisible(true)}
+              hitSlop={10}
+              className="relative w-9 h-9 rounded-full bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] items-center justify-center active:opacity-70"
+            >
+              <Ionicons
+                name="ellipsis-horizontal"
+                size={18}
+                color={isDark ? "#D1D5DB" : "#4B5563"}
+              />
+              {(showBookmarksOnly || selectedCategory !== "All") && (
+                <View className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
+              )}
+            </Pressable>
           )}
         </View>
       </View>
 
       {/* Segment Tabs */}
       {viewMode === "list" && (
-        <View className="px-6 pt-3 pb-2">
+        <View className="px-6 pt-1 pb-2">
           <View className="flex-row bg-[#ECE9E2] dark:bg-[#1E1E24] p-1 rounded-2xl">
             <Pressable
               onPress={() => setActiveTab("hymns")}
@@ -569,26 +665,52 @@ export default function HymnsScreen() {
             contentContainerStyle={{ paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={() => (
-              <View className="mt-12 items-center px-4">
+              <View className="mt-10 items-center px-6">
                 <Ionicons
                   name="musical-notes-outline"
-                  size={42}
+                  size={44}
                   color={isDark ? "#4B5563" : "#D1D5DB"}
                 />
-                <Text className="text-base font-bold text-[#1C1917] dark:text-[#F3F4F6] mt-3 font-serif">
-                  {t("noHymnsFoundTitle")}
-                </Text>
-                <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] text-center mt-1">
+                <Text className="text-base font-bold text-[#1C1917] dark:text-[#F3F4F6] mt-3 font-serif text-center">
                   {showBookmarksOnly
                     ? t("noHymnsBookmarksEmpty")
                     : searchQuery.trim()
                     ? `${t("noHymnsFound")} "${searchQuery}"`
+                    : activeHymnalBook === "yoruba"
+                    ? "Ko si orin Yorùbá lori ẹrọ rẹ sibẹ"
+                    : t("noHymnsFoundTitle")}
+                </Text>
+                <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA] text-center mt-1.5 leading-relaxed">
+                  {showBookmarksOnly
+                    ? "Star any hymn to add it to your favorites."
+                    : searchQuery.trim()
+                    ? "Try searching with a different word or hymn number."
+                    : activeHymnalBook === "yoruba"
+                    ? "Tẹ bọtini isalẹ lati gba gbogbo orin Ìwé Orin Mímọ́ wọle."
                     : "No offline hymns are currently loaded. Connect to the internet and tap sync."}
                 </Text>
+                {!showBookmarksOnly && !searchQuery.trim() && (
+                  <Pressable
+                    onPress={() => syncOfflineHymns(activeHymnalBook)}
+                    disabled={isSyncingHymns}
+                    className="mt-4 px-4 py-2.5 rounded-xl bg-[#D97706] flex-row items-center gap-x-2 active:opacity-80"
+                  >
+                    {isSyncingHymns ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="cloud-download-outline" size={16} color="#FFFFFF" />
+                    )}
+                    <Text className="text-xs font-bold text-white">
+                      {activeHymnalBook === "yoruba"
+                        ? "🇳🇬 Sync Yorùbá Hymnal"
+                        : "🇬🇧 Sync English Hymnal"}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             )}
             renderItem={({ item }) => {
-              const isBookmarked = hymnBookmarks.includes(item.number);
+              const isBookmarked = activeHymnBookmarks.includes(item.number);
               return (
                 <Pressable
                   onPress={() => handleOpenHymn(item)}
@@ -617,7 +739,10 @@ export default function HymnsScreen() {
                         numberOfLines={1}
                         className="text-[11px] text-[#78716C] dark:text-[#9CA3AF] mt-0.5"
                       >
-                        {[item.category, item.author].filter(Boolean).join(" • ")}
+                        {[
+                          item.category ? item.category.replace(/\bCAC\b/gi, "Mímọ́").replace(/Christ Apostolic Church/gi, "Orin Mímọ́") : "",
+                          item.author ? item.author.replace(/Christ Apostolic Church\s*(\(CAC\))?\s*(Worldwide)?/gi, "Ìwé Orin Mímọ́").replace(/\bCAC\b(\s*Worldwide)?/gi, "Ìwé Orin Mímọ́") : "",
+                        ].filter(Boolean).join(" • ")}
                       </Text>
                     </View>
                   </View>
@@ -626,7 +751,7 @@ export default function HymnsScreen() {
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation();
-                        toggleHymnBookmark(item.number);
+                        toggleHymnBookmark(item.number, activeHymnalBook);
                       }}
                       hitSlop={8}
                     >
@@ -731,9 +856,27 @@ export default function HymnsScreen() {
                   <View className="flex-row items-center justify-center py-2 px-4 mb-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 gap-x-2 w-full">
                     <ActivityIndicator size="small" color={isDark ? "#60A5FA" : "#1E40AF"} />
                     <Text className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                      {t("translatingContent")}
+                      {language === "yo" ? t("loadingYorubaHymn") : t("translatingContent")}
                     </Text>
                   </View>
+                )}
+
+                {activeHymnalBook === "yoruba" ? (
+                  <View className="flex-row items-center py-1 px-3.5 mb-3 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 gap-x-1.5">
+                    <Ionicons name="book-outline" size={13} color={isDark ? "#34D399" : "#059669"} />
+                    <Text className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                      Ìwé Orin Mímọ́ (Yorùbá)
+                    </Text>
+                  </View>
+                ) : (
+                  language === "yo" && !isTranslating && !(activeHymn.is_translated || (translatedHymn && (translatedHymn.title !== selectedHymn?.title || translatedHymn.verses !== selectedHymn?.verses))) && (
+                    <View className="flex-row items-center py-2 px-3 mb-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 gap-x-2 w-full">
+                      <Ionicons name="information-circle-outline" size={16} color={isDark ? "#FBBF24" : "#D97706"} />
+                      <Text className="text-xs text-amber-800 dark:text-amber-200 flex-1 leading-relaxed">
+                        {t("officialYorubaPending")}
+                      </Text>
+                    </View>
+                  )
                 )}
 
                 {/* Hymn Number & Title */}
@@ -746,7 +889,7 @@ export default function HymnsScreen() {
                   {activeHymn.author && (
                     <View className="bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] px-3 py-1 rounded-full">
                       <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                        {activeHymn.author}
+                        {activeHymn.author.replace(/Christ Apostolic Church\s*(\(CAC\))?\s*(Worldwide)?/gi, "Ìwé Orin Mímọ́").replace(/\bCAC\b(\s*Worldwide)?/gi, "Ìwé Orin Mímọ́")}
                       </Text>
                     </View>
                   )}
@@ -760,7 +903,7 @@ export default function HymnsScreen() {
                   {activeHymn.category && (
                     <View className="bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] px-3 py-1 rounded-full">
                       <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
-                        {activeHymn.category}
+                        {activeHymn.category.replace(/\bCAC\b/gi, "Mímọ́").replace(/Christ Apostolic Church/gi, "Orin Mímọ́")}
                       </Text>
                     </View>
                   )}
@@ -853,47 +996,143 @@ export default function HymnsScreen() {
         </View>
       )}
 
-      {/* Options Popup Modal */}
-      <Modal
-        visible={optionsModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOptionsModalVisible(false)}
-      >
-        <Pressable
-          className="flex-1 bg-black/60 justify-center items-center px-6"
-          onPress={() => setOptionsModalVisible(false)}
-        >
+      {/* Options Bottom Slide Sheet (In-Screen, not a native Modal) */}
+      {optionsModalVisible && (
+        <View className="absolute inset-0 z-50 justify-end">
           <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white dark:bg-[#1C1C20] rounded-3xl p-5 border border-[#E5E2DC] dark:border-[#2A2A32] shadow-2xl"
-          >
-            {/* Modal Header */}
-            <View className="flex-row items-center justify-between pb-3 mb-2 border-b border-[#EAE7E1] dark:border-[#282830]">
+            className="absolute inset-0 bg-black/60"
+            onPress={() => setOptionsModalVisible(false)}
+          />
+
+          <View className="w-full bg-[#FAF9F5] dark:bg-[#18181C] rounded-t-[32px] px-6 pt-3 pb-8 border-t border-[#E5E2DC] dark:border-[#2A2A32] shadow-2xl z-10">
+            {/* Grab / Slide Handle */}
+            <View className="w-12 h-1.5 rounded-full bg-[#D1CDCA] dark:bg-[#3E3E48] mx-auto mb-3" />
+
+            {/* Header */}
+            <View className="flex-row items-center justify-between pb-3 mb-3 border-b border-[#EAE7E1] dark:border-[#282830]">
               <View>
                 <Text className="text-base font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
                   Hymnal Options
                 </Text>
                 <Text className="text-[11px] text-[#78716C] dark:text-[#9CA3AF]">
-                  Quick actions & offline sync
+                  {activeHymnalBook === "yoruba" ? "Ìwé Orin Mímọ́ Yorùbá" : "English Hymnal Collection"}
                 </Text>
               </View>
               <Pressable
                 onPress={() => setOptionsModalVisible(false)}
                 hitSlop={8}
-                className="w-7 h-7 rounded-full bg-[#F5F4F0] dark:bg-[#25252C] items-center justify-center active:opacity-70"
+                className="w-7 h-7 rounded-full bg-[#EAE7E1] dark:bg-[#25252C] items-center justify-center active:opacity-70"
               >
                 <Ionicons name="close" size={16} color={isDark ? "#9CA3AF" : "#6B7280"} />
               </Pressable>
             </View>
 
-            {/* Option 1: Go to Hymn # */}
+            {/* Switch Hymnal Collection Section */}
+            <View className="mb-4">
+              <View className="flex-row items-center justify-between mb-2 px-0.5">
+                <Text className="text-[10px] uppercase font-bold tracking-wider text-[#78716C] dark:text-[#9CA3AF]">
+                  Switch Hymnal Collection
+                </Text>
+                {isLoadingBook && (
+                  <View className="flex-row items-center gap-x-1">
+                    <ActivityIndicator size="small" color="#D97706" />
+                    <Text className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Loading...</Text>
+                  </View>
+                )}
+              </View>
+              <View className="flex-row gap-x-2.5">
+                {/* English Hymnal */}
+                <Pressable
+                  onPress={() => handleSwitchBook("english")}
+                  className={`flex-1 p-3 rounded-2xl border ${
+                    activeHymnalBook === "english"
+                      ? "bg-[#D97706] border-[#B45309] shadow-sm"
+                      : "bg-white dark:bg-[#222228] border-[#E5E2DC] dark:border-[#2A2A32] active:opacity-75"
+                  }`}
+                >
+                  <View className="flex-row items-center justify-between mb-1.5">
+                    <Ionicons
+                      name="book-outline"
+                      size={18}
+                      color={activeHymnalBook === "english" ? "#FFFFFF" : isDark ? "#F3F4F6" : "#1C1917"}
+                    />
+                    {activeHymnalBook === "english" && (
+                      <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                    )}
+                  </View>
+                  <Text
+                    className={`text-sm font-bold ${
+                      activeHymnalBook === "english"
+                        ? "text-white"
+                        : "text-[#1C1917] dark:text-[#F3F4F6]"
+                    }`}
+                  >
+                    English
+                  </Text>
+                  <Text
+                    className={`text-[11px] ${
+                      activeHymnalBook === "english"
+                        ? "text-amber-100"
+                        : "text-[#78716C] dark:text-[#9CA3AF]"
+                    }`}
+                  >
+                    {localEnglishHymns.length} Hymns
+                  </Text>
+                </Pressable>
+
+                {/* Yoruba Hymnal */}
+                <Pressable
+                  onPress={() => handleSwitchBook("yoruba")}
+                  className={`flex-1 p-3 rounded-2xl border ${
+                    activeHymnalBook === "yoruba"
+                      ? "bg-[#D97706] border-[#B45309] shadow-sm"
+                      : "bg-white dark:bg-[#222228] border-[#E5E2DC] dark:border-[#2A2A32] active:opacity-75"
+                  }`}
+                >
+                  <View className="flex-row items-center justify-between mb-1.5">
+                    <Ionicons
+                      name="musical-notes-outline"
+                      size={18}
+                      color={activeHymnalBook === "yoruba" ? "#FFFFFF" : isDark ? "#F3F4F6" : "#1C1917"}
+                    />
+                    {activeHymnalBook === "yoruba" && (
+                      <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                    )}
+                  </View>
+                  <Text
+                    className={`text-sm font-bold ${
+                      activeHymnalBook === "yoruba"
+                        ? "text-white"
+                        : "text-[#1C1917] dark:text-[#F3F4F6]"
+                    }`}
+                  >
+                    Ìwé Orin Mímọ́
+                  </Text>
+                  <Text
+                    className={`text-[11px] ${
+                      activeHymnalBook === "yoruba"
+                        ? "text-amber-100"
+                        : "text-[#78716C] dark:text-[#9CA3AF]"
+                    }`}
+                  >
+                    {localYorubaHymns.length} Orin
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Quick Actions Title */}
+            <Text className="text-[10px] uppercase font-bold tracking-wider text-[#78716C] dark:text-[#9CA3AF] mb-2 px-0.5">
+              Quick Actions
+            </Text>
+
+            {/* Action 1: Go to Hymn # */}
             <Pressable
               onPress={() => {
                 setOptionsModalVisible(false);
                 setJumpModalVisible(true);
               }}
-              className="flex-row items-center p-3 rounded-2xl mb-2 bg-[#FAF9F6] dark:bg-[#222228] active:opacity-75"
+              className="flex-row items-center p-3 rounded-2xl mb-2 bg-white dark:bg-[#222228] border border-[#E5E2DC] dark:border-[#2A2A32] active:opacity-75"
             >
               <View className="w-9 h-9 rounded-xl bg-stone-200/80 dark:bg-stone-800 items-center justify-center mr-3">
                 <Ionicons name="keypad-outline" size={18} color={isDark ? "#F3F4F6" : "#1C1917"} />
@@ -909,13 +1148,13 @@ export default function HymnsScreen() {
               <Ionicons name="chevron-forward" size={16} color={isDark ? "#6B7280" : "#9CA3AF"} />
             </Pressable>
 
-            {/* Option 2: Starred Hymns Toggle */}
+            {/* Action 2: Starred Hymns Toggle */}
             <Pressable
               onPress={() => {
                 setShowBookmarksOnly((prev) => !prev);
                 setOptionsModalVisible(false);
               }}
-              className="flex-row items-center p-3 rounded-2xl mb-2 bg-[#FAF9F6] dark:bg-[#222228] active:opacity-75"
+              className="flex-row items-center p-3 rounded-2xl mb-2 bg-white dark:bg-[#222228] border border-[#E5E2DC] dark:border-[#2A2A32] active:opacity-75"
             >
               <View className={`w-9 h-9 rounded-xl ${showBookmarksOnly ? "bg-amber-500/20" : "bg-stone-200/80 dark:bg-stone-800"} items-center justify-center mr-3`}>
                 <Ionicons
@@ -929,7 +1168,7 @@ export default function HymnsScreen() {
                   {showBookmarksOnly ? t("all") : t("starred")}
                 </Text>
                 <Text className="text-[11px] text-[#78716C] dark:text-[#9CA3AF]">
-                  {hymnBookmarks.length} {t("starred")}
+                  {activeHymnBookmarks.length} {t("starred")}
                 </Text>
               </View>
               {showBookmarksOnly ? (
@@ -941,14 +1180,14 @@ export default function HymnsScreen() {
               )}
             </Pressable>
 
-            {/* Option 3: Sync Offline Hymns */}
+            {/* Action 3: Sync Offline Hymns */}
             <Pressable
               onPress={() => {
                 setOptionsModalVisible(false);
-                syncOfflineHymns();
+                syncOfflineHymns(activeHymnalBook);
               }}
               disabled={isSyncingHymns}
-              className="flex-row items-center p-3 rounded-2xl bg-[#FAF9F6] dark:bg-[#222228] active:opacity-75"
+              className="flex-row items-center p-3 rounded-2xl bg-white dark:bg-[#222228] border border-[#E5E2DC] dark:border-[#2A2A32] active:opacity-75"
             >
               <View className="w-9 h-9 rounded-xl bg-stone-200/80 dark:bg-stone-800 items-center justify-center mr-3">
                 {isSyncingHymns ? (
@@ -962,30 +1201,23 @@ export default function HymnsScreen() {
                   {isSyncingHymns ? "Syncing Collection..." : t("syncHymns")}
                 </Text>
                 <Text className="text-[11px] text-[#78716C] dark:text-[#9CA3AF]">
-                  {offlineHymns.length} hymns
+                  {currentHymns.length} {activeHymnalBook === "yoruba" ? "Yorùbá hymns" : "English hymns"} cached
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={isDark ? "#6B7280" : "#9CA3AF"} />
             </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        </View>
+      )}
 
-      {/* Category Picker Modal */}
-      <Modal
-        visible={categoryModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCategoryModalVisible(false)}
-      >
-        <Pressable
-          className="flex-1 bg-black/60 justify-end sm:justify-center items-center px-4 pb-6 sm:pb-0"
-          onPress={() => setCategoryModalVisible(false)}
-        >
+      {/* Category Picker In-Screen Overlay */}
+      {categoryModalVisible && (
+        <View className="absolute inset-0 z-50 justify-end sm:justify-center items-center px-4 pb-6 sm:pb-0">
           <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white dark:bg-[#1C1C20] rounded-3xl p-5 border border-[#E5E2DC] dark:border-[#2A2A32] shadow-2xl max-h-[75%]"
-          >
+            className="absolute inset-0 bg-black/60"
+            onPress={() => setCategoryModalVisible(false)}
+          />
+          <View className="w-full max-w-sm bg-white dark:bg-[#1C1C20] rounded-3xl p-5 border border-[#E5E2DC] dark:border-[#2A2A32] shadow-2xl max-h-[75%] z-10">
             <View className="flex-row items-center justify-between pb-3 mb-2 border-b border-[#EAE7E1] dark:border-[#282830]">
               <View>
                 <Text className="text-base font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
@@ -1057,25 +1289,18 @@ export default function HymnsScreen() {
                 );
               }}
             />
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        </View>
+      )}
 
-      {/* Jump to Hymn # Modal */}
-      <Modal
-        visible={jumpModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setJumpModalVisible(false)}
-      >
-        <Pressable
-          className="flex-1 bg-black/60 justify-center items-center px-6"
-          onPress={() => setJumpModalVisible(false)}
-        >
+      {/* Jump to Hymn # In-Screen Overlay */}
+      {jumpModalVisible && (
+        <View className="absolute inset-0 z-50 justify-center items-center px-6">
           <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white dark:bg-[#1E1E22] rounded-3xl p-6 border border-[#E0E1E6] dark:border-[#2E3135] shadow-xl"
-          >
+            className="absolute inset-0 bg-black/60"
+            onPress={() => setJumpModalVisible(false)}
+          />
+          <View className="w-full max-w-sm bg-white dark:bg-[#1E1E22] rounded-3xl p-6 border border-[#E0E1E6] dark:border-[#2E3135] shadow-xl z-10">
             <Text className="text-lg font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6] text-center mb-1">
               {t("jumpToHymn")}
             </Text>
@@ -1109,9 +1334,9 @@ export default function HymnsScreen() {
                 <Text className="text-sm font-semibold text-white dark:text-[#1C1917]">{t("confirm")}</Text>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

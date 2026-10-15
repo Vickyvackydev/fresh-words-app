@@ -124,6 +124,9 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     markCompleted: "Mark as Read",
     readingTime: "min read",
     translatingContent: "Translating to your preferred language...",
+    yweOrinMimo: "Authentic Yoruba Hymnal (Ìwé Orin Mímọ́)",
+    officialYorubaPending: "Official Yoruba lyrics for this hymn have not been uploaded yet. Showing original English lyrics.",
+    loadingYorubaHymn: "Loading authentic Yoruba hymnal lyrics...",
 
     // Settings
     appearance: "Appearance",
@@ -337,6 +340,9 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     markCompleted: "Marquer comme lu",
     readingTime: "min de lecture",
     translatingContent: "Traduction dans votre langue...",
+    yweOrinMimo: "Recueil de Cantiques Yoruba Authentique (Ìwé Orin Mímọ́)",
+    officialYorubaPending: "Les paroles yoruba officielles pour ce cantique ne sont pas encore disponibles. Affichage des paroles originales.",
+    loadingYorubaHymn: "Chargement des cantiques yoruba authentiques...",
 
     // Settings
     appearance: "Apparence",
@@ -550,6 +556,9 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     markCompleted: "Marcar como leído",
     readingTime: "min de lectura",
     translatingContent: "Traduciendo a tu idioma preferido...",
+    yweOrinMimo: "Himnario Yoruba Auténtico (Ìwé Orin Mímọ́)",
+    officialYorubaPending: "La letra oficial en yoruba para este himno aún no está disponible. Mostrando la versión original en inglés.",
+    loadingYorubaHymn: "Cargando himno yoruba auténtico...",
 
     // Settings
     appearance: "Apariencia",
@@ -763,6 +772,9 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     markCompleted: "Fi hàn pé a ti kà á",
     readingTime: "ìṣẹ́jú kíkà",
     translatingContent: "À ń túmọ̀ sí èdè rẹ...",
+    yweOrinMimo: "Ìwé Orin Mímọ́ (Èdè Yorùbá)",
+    officialYorubaPending: "Orin yi kò tíì ní orin Yorùbá tí a fọwọ́sí lórí ẹ̀rọ. À ń fi orin gẹ̀ẹ́sì hàn fún ìgbà díẹ̀.",
+    loadingYorubaHymn: "À ń gbé orin mímọ́ jáde...",
 
     // Settings
     appearance: "Ìrísí",
@@ -976,6 +988,9 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     markCompleted: "Kaa ya ka agụrụ",
     readingTime: "nkeji ọgụgụ",
     translatingContent: "Na-asụgharị n'asụsụ gị...",
+    yweOrinMimo: "Akwụkwọ Abụ Yoruba nke Eziokwu (Ìwé Orin Mímọ́)",
+    officialYorubaPending: "E bipụtabeghị abụ Yoruba maka nke a. Anyị na-egosi nke Bekee ugbu a.",
+    loadingYorubaHymn: "Na-ebu abụ Yoruba nke eziokwu...",
 
     // Settings
     appearance: "Ọdịdị",
@@ -1189,6 +1204,9 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     markCompleted: "Alama an karanta",
     readingTime: "minti na karantawa",
     translatingContent: "Ana fassara zuwa yarenka...",
+    yweOrinMimo: "Littafin Waƙoƙin Yarbawa na Gaskiya (Ìwé Orin Mímọ́)",
+    officialYorubaPending: "Ba a riga an ɗora ainihin waƙar Yarbawa don wannan ba tukuna. Ana nuna ainihin Turanci.",
+    loadingYorubaHymn: "Ana loda ainihin waƙoƙin Yarbawa...",
 
     // Settings
     appearance: "Kyan Gani",
@@ -1402,6 +1420,9 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     markCompleted: "Marcar como lido",
     readingTime: "min de leitura",
     translatingContent: "Traduzindo para seu idioma preferido...",
+    yweOrinMimo: "Hinário Iorubá Autêntico (Ìwé Orin Mímọ́)",
+    officialYorubaPending: "A letra oficial em iorubá para este hino ainda não foi carregada. Mostrando o original em inglês.",
+    loadingYorubaHymn: "Carregando letra autêntica do hinário iorubá...",
 
     // Settings
     appearance: "Aparência",

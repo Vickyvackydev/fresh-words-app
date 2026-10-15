@@ -7,6 +7,7 @@ export interface Hymn {
   category: string;
   author?: string;
   key?: string;
+  is_translated?: boolean;
 }
 
 export const MOCK_HYMNS: Hymn[] = [
