@@ -101,7 +101,7 @@ export default function HomeScreen() {
   const [translatedTodayDevo, setTranslatedTodayDevo] = useState<any | null>(null);
 
   useEffect(() => {
-    if (!language || language === "en" || !cachedDevotional?.id) {
+    if (!language || language === "en" || language === "yo" || !cachedDevotional?.id) {
       setTranslatedTodayDevo(null);
       return;
     }
