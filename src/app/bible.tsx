@@ -1,7 +1,7 @@
 import { useApp } from "@/context/AppContext";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -94,12 +94,37 @@ const BIBLE_BOOKS = [
   { abbrev: "rv", name: "Revelation", testament: "New" as const },
 ];
 
-let cachedBible: BibleBook[] | null = null;
+let cachedBibleKjv: BibleBook[] | null = null;
+let cachedBibleYo: BibleBook[] | null = null;
 
-export function getFullBible(): BibleBook[] {
-  if (cachedBible) return cachedBible;
+export function getFullBible(version: "kjv" | "yo" = "kjv"): BibleBook[] {
+  if (version === "yo") {
+    if (cachedBibleYo) return cachedBibleYo;
+    const BIBLE_RAW_DATA = require("../db/bible-yo.json");
+    cachedBibleYo = (BIBLE_RAW_DATA as any).map((book: any, bookIdx: number) => {
+      const meta = BIBLE_BOOKS[bookIdx] || {
+        abbrev: book.abbrev,
+        name: book.abbrev,
+        testament: "Old" as const,
+      };
+      return {
+        name: meta.name,
+        testament: meta.testament,
+        chapters: book.chapters.map((chap: string[], chapIdx: number) => ({
+          chapter: chapIdx + 1,
+          verses: chap.map((vStr: string, vIdx: number) => ({
+            verse: vIdx + 1,
+            text: vStr.replace(/\{|\}/g, ""),
+          })),
+        })),
+      };
+    });
+    return cachedBibleYo!;
+  }
+
+  if (cachedBibleKjv) return cachedBibleKjv;
   const BIBLE_RAW_DATA = require("../db/bible-kjv.json");
-  cachedBible = (BIBLE_RAW_DATA as any).map((book: any, bookIdx: number) => {
+  cachedBibleKjv = (BIBLE_RAW_DATA as any).map((book: any, bookIdx: number) => {
     const meta = BIBLE_BOOKS[bookIdx] || {
       abbrev: book.abbrev,
       name: book.abbrev,
@@ -117,13 +142,34 @@ export function getFullBible(): BibleBook[] {
       })),
     };
   });
-  return cachedBible!;
+  return cachedBibleKjv!;
 }
 
 export default function BibleScreen() {
-  const FULL_BIBLE = getFullBible();
   const insets = useSafeAreaInsets();
   const { isDark, fontSize, language, t } = useApp();
+
+  // Bible Version: 'kjv' | 'yo' (Bíbélì Mímọ́)
+  const [bibleVersion, setBibleVersionState] = useState<"kjv" | "yo">(() => {
+    return language === "yo" ? "yo" : "kjv";
+  });
+
+  const setBibleVersion = (ver: "kjv" | "yo") => {
+    setBibleVersionState(ver);
+    AsyncStorage.setItem("preferred_bible_version", ver).catch(() => {});
+  };
+
+  useEffect(() => {
+    AsyncStorage.getItem("preferred_bible_version").then((stored) => {
+      if (stored === "yo" || stored === "kjv") {
+        setBibleVersionState(stored);
+      } else if (language === "yo") {
+        setBibleVersionState("yo");
+      }
+    });
+  }, [language]);
+
+  const FULL_BIBLE = useMemo(() => getFullBible(bibleVersion), [bibleVersion]);
 
   const { book, chapter, verse } = useLocalSearchParams<{
     book?: string;
@@ -142,12 +188,26 @@ export default function BibleScreen() {
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [selectedVerseNum, setSelectedVerseNum] = useState<number | null>(null);
 
-  // Translation state for the current chapter
+  // Keep selectedBook synced when version changes
+  useEffect(() => {
+    if (selectedBook) {
+      const match = FULL_BIBLE.find((b) => b.name === selectedBook.name);
+      if (match) setSelectedBook(match);
+    }
+  }, [bibleVersion, FULL_BIBLE]);
+
+  // Translation state for the current chapter (for non-English and non-Yoruba languages)
   const [translatedVerses, setTranslatedVerses] = useState<Record<number, string>>({});
   const [isTranslatingChapter, setIsTranslatingChapter] = useState(false);
 
   useEffect(() => {
-    if (!selectedBook || selectedChapter === null || !language || language === "en") {
+    if (
+      !selectedBook ||
+      selectedChapter === null ||
+      !language ||
+      language === "en" ||
+      bibleVersion === "yo"
+    ) {
       setTranslatedVerses({});
       setIsTranslatingChapter(false);
       return;
@@ -462,6 +522,35 @@ export default function BibleScreen() {
       edges={["left", "right", "top"]}
       className="flex-1 bg-[#FDFBF7] dark:bg-[#121212]"
     >
+      {/* Bible Title & Version Toggle */}
+      {viewMode !== "reader" && (
+        <View className="px-6 pt-3 pb-1 flex-row items-center justify-between">
+          <View>
+            <Text className="text-xl font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
+              {bibleVersion === "yo" ? "Bíbélì Mímọ́" : t("bible")}
+            </Text>
+            <Text className="text-xs text-[#60646C] dark:text-[#B0B4BA]">
+              {bibleVersion === "yo" ? "Àwọn Ìwé Mímọ́ (Yorùbá 1900)" : "King James Version (KJV)"}
+            </Text>
+          </View>
+
+          <View className="flex-row items-center bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-xl p-1">
+            <Pressable
+              onPress={() => setBibleVersion("kjv")}
+              className={`px-3 py-1 rounded-lg ${bibleVersion === "kjv" ? "bg-[#1E40AF] dark:bg-[#2563EB]" : ""}`}
+            >
+              <Text className={`text-xs font-bold ${bibleVersion === "kjv" ? "text-white" : "text-[#60646C] dark:text-[#B0B4BA]"}`}>KJV</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setBibleVersion("yo")}
+              className={`px-3 py-1 rounded-lg ${bibleVersion === "yo" ? "bg-emerald-600 dark:bg-emerald-500" : ""}`}
+            >
+              <Text className={`text-xs font-bold ${bibleVersion === "yo" ? "text-white" : "text-[#60646C] dark:text-[#B0B4BA]"}`}>Yorùbá</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       {/* Tab Segment Controls */}
       {viewMode !== "reader" && (
         <View className="px-6 pt-4 pb-2 flex-row gap-x-2">
@@ -806,9 +895,28 @@ export default function BibleScreen() {
                   {t("verses")}
                 </Text>
               </Pressable>
-              <Text className="text-lg font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
-                {getLocalizedBookName(selectedBook.name, language)} {selectedChapter}
-              </Text>
+
+              <View className="items-center">
+                <Text className="text-base font-bold font-serif text-[#1C1917] dark:text-[#F3F4F6]">
+                  {getLocalizedBookName(selectedBook.name, bibleVersion === "yo" ? "yo" : language)} {selectedChapter}
+                </Text>
+                {/* Version switcher pill in reader */}
+                <View className="flex-row items-center bg-[#FAF8F5] dark:bg-[#1C1C1E] border border-[#E0E1E6] dark:border-[#2E3135] rounded-full p-0.5 mt-0.5">
+                  <Pressable
+                    onPress={() => setBibleVersion("kjv")}
+                    className={`px-2 py-0.5 rounded-full ${bibleVersion === "kjv" ? "bg-[#1E40AF] dark:bg-[#2563EB]" : ""}`}
+                  >
+                    <Text className={`text-[10px] font-bold ${bibleVersion === "kjv" ? "text-white" : "text-[#60646C] dark:text-[#B0B4BA]"}`}>KJV</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setBibleVersion("yo")}
+                    className={`px-2 py-0.5 rounded-full ${bibleVersion === "yo" ? "bg-emerald-600 dark:bg-emerald-500" : ""}`}
+                  >
+                    <Text className={`text-[10px] font-bold ${bibleVersion === "yo" ? "text-white" : "text-[#60646C] dark:text-[#B0B4BA]"}`}>Bíbélì Mímọ́</Text>
+                  </Pressable>
+                </View>
+              </View>
+
               <Pressable
                 onPress={() => {
                   setSelectedBook(null);
@@ -848,7 +956,7 @@ export default function BibleScreen() {
                   const key = `${selectedBook.name}-${selectedChapter}-${v.verse}`;
                   const highlightColor = highlightedVerses[key];
                   const isTarget = selectedVerseNum === v.verse;
-                  const verseText = translatedVerses[v.verse] || v.text;
+                  const verseText = bibleVersion === "yo" ? v.text : (translatedVerses[v.verse] || v.text);
                   return (
                     <Pressable
                       key={v.verse}
