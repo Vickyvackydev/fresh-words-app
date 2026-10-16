@@ -66,6 +66,7 @@ export default function DevotionReader({
     }
 
     let isMounted = true;
+    setTranslatedDevotional(null);
     setIsTranslating(true);
     const baseUrl = getBaseUrl();
     fetch(`${baseUrl}/devotionals/${rawDevotional.id}?lang=${language}`)
